@@ -35,6 +35,23 @@ create table if not exists public.profiles (
 
 alter table public.profiles enable row level security;
 
+-- Helper: is the current user an owner?  (SECURITY DEFINER so it can read
+-- profiles regardless of the caller's own RLS.)
+-- NOTE: defined BEFORE the policies below because they reference it. Creating a
+-- policy whose USING expression calls a not-yet-existing function fails with
+-- "function public.is_owner() does not exist".
+create or replace function public.is_owner()
+returns boolean
+language sql
+stable
+security definer set search_path = public
+as $$
+  select exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role = 'owner'
+  );
+$$;
+
 -- Any logged-in user can read their OWN profile (needed to know their role).
 drop policy if exists "read own profile" on public.profiles;
 create policy "read own profile"
@@ -67,20 +84,6 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
-
--- Helper: is the current user an owner?  (SECURITY DEFINER so it can read
--- profiles regardless of the caller's own RLS.)
-create or replace function public.is_owner()
-returns boolean
-language sql
-stable
-security definer set search_path = public
-as $$
-  select exists (
-    select 1 from public.profiles
-    where id = auth.uid() and role = 'owner'
-  );
-$$;
 
 -- ---------------------------------------------------------------------------
 -- 2. VISITORS  (guard-facing record — NO real phone number here)
