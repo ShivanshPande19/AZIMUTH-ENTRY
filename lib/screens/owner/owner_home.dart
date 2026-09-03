@@ -1,52 +1,28 @@
 import 'package:flutter/material.dart';
 
 import '../../services/auth_service.dart';
-import 'audit_screen.dart';
 import 'owner_visitors_screen.dart';
 
-/// Owner shell with two tabs: the full register and the phone-view audit log.
-class OwnerHome extends StatefulWidget {
+/// Owner shell: the full visitor register with a summary and date filtering.
+class OwnerHome extends StatelessWidget {
   const OwnerHome({super.key});
 
   @override
-  State<OwnerHome> createState() => _OwnerHomeState();
-}
-
-class _OwnerHomeState extends State<OwnerHome> {
-  int _index = 0;
-  final _auth = AuthService();
-
-  @override
   Widget build(BuildContext context) {
-    final pages = const [OwnerVisitorsScreen(), AuditScreen()];
+    final auth = AuthService();
     return Scaffold(
       appBar: AppBar(
-        title: Text(_index == 0 ? 'All Visitors' : 'Access Audit'),
+        title: const Text('Visitors'),
         actions: [
           IconButton(
             tooltip: 'Sign out',
-            icon: const Icon(Icons.logout),
-            onPressed: () => _auth.signOut(),
+            icon: const Icon(Icons.logout_rounded),
+            onPressed: () => auth.signOut(),
           ),
+          const SizedBox(width: 4),
         ],
       ),
-      body: pages[_index],
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.list_alt_outlined),
-            selectedIcon: Icon(Icons.list_alt),
-            label: 'Register',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.history_outlined),
-            selectedIcon: Icon(Icons.history),
-            label: 'Audit',
-          ),
-        ],
-      ),
+      body: const OwnerVisitorsScreen(),
     );
   }
 }

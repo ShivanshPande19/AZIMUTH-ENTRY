@@ -65,15 +65,6 @@ class VisitorService {
     return (result as String?) ?? '';
   }
 
-  /// OWNER ONLY. The phone-reveal audit trail with visitor names joined in.
-  Future<List<AuditEntry>> listAudit() async {
-    final rows = await _client
-        .from('phone_view_audit')
-        .select('id, visitor_id, viewed_at, visitors(name)')
-        .order('viewed_at', ascending: false)
-        .limit(200);
-    return (rows as List)
-        .map((r) => AuditEntry.fromMap(r as Map<String, dynamic>))
-        .toList();
-  }
+  // Note: reveal_phone() still records an audit row in the database on every
+  // call (server-side). The in-app audit view was removed as it wasn't needed.
 }
