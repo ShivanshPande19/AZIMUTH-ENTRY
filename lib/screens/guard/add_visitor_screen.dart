@@ -4,11 +4,6 @@ import 'package:flutter/services.dart';
 import '../../services/visitor_service.dart';
 
 /// Screen where a NEW visitor is registered.
-///
-/// The phone field is meant to be filled in by the visitor themselves and is
-/// fully obscured (shown as dots) so the guard standing there cannot read it.
-/// The real number is sent to the server, which keeps only a masked copy that
-/// the guard can see later.
 class AddVisitorScreen extends StatefulWidget {
   const AddVisitorScreen({super.key});
 
@@ -20,7 +15,7 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
-  final _companyCtrl = TextEditingController();
+  final _addressCtrl = TextEditingController();
   final _purposeCtrl = TextEditingController();
   final _service = VisitorService();
 
@@ -30,7 +25,7 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
   void dispose() {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
-    _companyCtrl.dispose();
+    _addressCtrl.dispose();
     _purposeCtrl.dispose();
     super.dispose();
   }
@@ -42,7 +37,7 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
       await _service.addVisitor(
         name: _nameCtrl.text,
         phone: _phoneCtrl.text,
-        company: _companyCtrl.text,
+        company: _addressCtrl.text,
         purpose: _purposeCtrl.text,
       );
       if (!mounted) return;
@@ -59,20 +54,16 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text('New entry')),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // ---- Visitor details card -----------------------------------
-                _SectionLabel(icon: Icons.badge_outlined, text: 'Visitor details'),
-                const SizedBox(height: 10),
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -92,12 +83,12 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
                         ),
                         const SizedBox(height: 14),
                         TextFormField(
-                          controller: _companyCtrl,
+                          controller: _addressCtrl,
                           textCapitalization: TextCapitalization.words,
                           textInputAction: TextInputAction.next,
                           decoration: const InputDecoration(
-                            labelText: 'Company (optional)',
-                            prefixIcon: Icon(Icons.business_outlined),
+                            labelText: 'Address (optional)',
+                            prefixIcon: Icon(Icons.location_on_outlined),
                           ),
                         ),
                         const SizedBox(height: 14),
@@ -110,25 +101,10 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
                             prefixIcon: Icon(Icons.notes_outlined),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // ---- Private phone card -------------------------------------
-                _SectionLabel(
-                    icon: Icons.lock_outline_rounded, text: 'Private phone'),
-                const SizedBox(height: 10),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
+                        const SizedBox(height: 14),
                         TextFormField(
                           controller: _phoneCtrl,
-                          obscureText: true, // guard cannot read what is typed
+                          obscureText: true,
                           obscuringCharacter: '•',
                           keyboardType: TextInputType.phone,
                           enableSuggestions: false,
@@ -139,11 +115,8 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
                             LengthLimitingTextInputFormatter(15),
                           ],
                           decoration: const InputDecoration(
-                            labelText: 'Visitor phone number',
+                            labelText: 'Phone number',
                             prefixIcon: Icon(Icons.phone_outlined),
-                            helperText:
-                                'Hand the device to the visitor to type.',
-                            helperMaxLines: 2,
                           ),
                           validator: (v) {
                             final digits =
@@ -154,33 +127,6 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
                             }
                             return null;
                           },
-                        ),
-                        const SizedBox(height: 14),
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: scheme.primary.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.shield_outlined,
-                                  size: 22, color: scheme.primary),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  'Hidden as it is typed and can never be read '
-                                  'back from this device — only the owner can '
-                                  'reveal it.',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                          color: scheme.onSurfaceVariant),
-                                ),
-                              ),
-                            ],
-                          ),
                         ),
                       ],
                     ),
@@ -204,31 +150,6 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.icon, required this.text});
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: scheme.primary),
-        const SizedBox(width: 8),
-        Text(
-          text.toUpperCase(),
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.8,
-              ),
-        ),
-      ],
     );
   }
 }
