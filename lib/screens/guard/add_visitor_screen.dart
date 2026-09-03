@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../theme.dart';
 import '../../services/visitor_service.dart';
 
 /// Screen where a NEW visitor is registered.
@@ -54,20 +55,82 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final brightness = Theme.of(context).brightness;
+
     return Scaffold(
       appBar: AppBar(title: const Text('New entry')),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // ---- Welcoming header --------------------------------------
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: AppTheme.brandGradient(brightness),
+                    borderRadius: BorderRadius.circular(AppTheme.radius),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.seed.withValues(alpha: 0.28),
+                        blurRadius: 18,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Icon(Icons.person_add_alt_1_rounded,
+                            color: Colors.white, size: 28),
+                      ),
+                      const SizedBox(width: 16),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Register a visitor',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 19,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                            SizedBox(height: 3),
+                            Text(
+                              'Fill in the details below to record the entry.',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                                height: 1.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // ---- Fields -------------------------------------------------
                 Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(18),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         TextFormField(
                           controller: _nameCtrl,
@@ -81,7 +144,7 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
                               ? 'Name is required'
                               : null,
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 16),
                         TextFormField(
                           controller: _addressCtrl,
                           textCapitalization: TextCapitalization.words,
@@ -91,17 +154,17 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
                             prefixIcon: Icon(Icons.location_on_outlined),
                           ),
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 16),
                         TextFormField(
                           controller: _purposeCtrl,
                           textCapitalization: TextCapitalization.sentences,
                           textInputAction: TextInputAction.next,
                           decoration: const InputDecoration(
-                            labelText: 'Purpose (optional)',
+                            labelText: 'Purpose of visit (optional)',
                             prefixIcon: Icon(Icons.notes_outlined),
                           ),
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 16),
                         TextFormField(
                           controller: _phoneCtrl,
                           obscureText: true,
@@ -127,6 +190,29 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
                             }
                             return null;
                           },
+                        ),
+                        const SizedBox(height: 10),
+                        // ---- Polite remark under the phone field -----------
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.info_outline_rounded,
+                                size: 16, color: scheme.primary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Please hand the device to the visitor or '
+                                'client so they can enter their own number.',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: scheme.onSurfaceVariant,
+                                      height: 1.35,
+                                    ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
