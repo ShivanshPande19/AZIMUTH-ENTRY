@@ -312,35 +312,52 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
   }
 
   Widget _buildBody() {
+    final Widget child;
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_error != null) {
-      return _ErrorView(message: '$_error', onRetry: _load);
-    }
-    if (_items.isEmpty) {
-      return _EmptyView(
-        searching: _query.trim().isNotEmpty,
-        isToday: _isToday,
+      child = const KeyedSubtree(
+        key: ValueKey('loading'),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    } else if (_error != null) {
+      child = KeyedSubtree(
+        key: const ValueKey('error'),
+        child: _ErrorView(message: '$_error', onRetry: _load),
+      );
+    } else if (_items.isEmpty) {
+      child = KeyedSubtree(
+        key: const ValueKey('empty'),
+        child: _EmptyView(
+          searching: _query.trim().isNotEmpty,
+          isToday: _isToday,
+        ),
+      );
+    } else {
+      final rows = _buildRows(_items);
+      // Stable key: the scroll controller must attach to only one ListView, so
+      // page/filter changes reuse this one instead of cross-fading two lists.
+      child = ListView.builder(
+        key: const ValueKey('list'),
+        controller: _scroll,
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+        itemCount: rows.length,
+        itemBuilder: (context, i) {
+          final row = rows[i];
+          return switch (row) {
+            _HeaderRow() => _DayHeader(
+                label: row.label, count: row.count, isToday: row.isToday),
+            _VisitorRow() => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child:
+                    _OwnerVisitorTile(visitor: row.visitor, onReveal: _reveal),
+              ),
+          };
+        },
       );
     }
-    final rows = _buildRows(_items);
-    return ListView.builder(
-      controller: _scroll,
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-      itemCount: rows.length,
-      itemBuilder: (context, i) {
-        final row = rows[i];
-        return switch (row) {
-          _HeaderRow() => _DayHeader(
-              label: row.label, count: row.count, isToday: row.isToday),
-          _VisitorRow() => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child:
-                  _OwnerVisitorTile(visitor: row.visitor, onReveal: _reveal),
-            ),
-        };
-      },
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 260),
+      switchInCurve: Curves.easeOutCubic,
+      child: child,
     );
   }
 

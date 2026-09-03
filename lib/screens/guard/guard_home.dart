@@ -139,7 +139,16 @@ class _GuardHomeState extends State<GuardHome> {
           const SizedBox(width: 4),
         ],
       ),
-      floatingActionButton: _NewEntryFab(onTap: _addVisitor),
+      floatingActionButton: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 380),
+        curve: Curves.easeOutBack,
+        builder: (context, t, child) => Transform.scale(
+          scale: t,
+          child: Opacity(opacity: t.clamp(0.0, 1.0), child: child),
+        ),
+        child: _NewEntryFab(onTap: _addVisitor),
+      ),
       body: Column(
         children: [
           WorkingDateBar(
@@ -179,25 +188,42 @@ class _GuardHomeState extends State<GuardHome> {
               child: FutureBuilder<List<Visitor>>(
                 future: _future,
                 builder: (context, snapshot) {
+                  final Widget child;
                   if (snapshot.connectionState != ConnectionState.done) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) {
-                    return _ErrorView(
-                      message: '${snapshot.error}',
-                      onRetry: _reload,
+                    child = const KeyedSubtree(
+                      key: ValueKey('loading'),
+                      child: Center(child: CircularProgressIndicator()),
                     );
+                  } else if (snapshot.hasError) {
+                    child = KeyedSubtree(
+                      key: const ValueKey('error'),
+                      child: _ErrorView(
+                          message: '${snapshot.error}', onRetry: _reload),
+                    );
+                  } else {
+                    final list = snapshot.data ?? [];
+                    if (list.isEmpty) {
+                      child = KeyedSubtree(
+                        key: const ValueKey('empty'),
+                        child: _EmptyView(
+                            onlyInside: _onlyInside, isToday: _isToday),
+                      );
+                    } else {
+                      child = ListView.separated(
+                        key: ValueKey(
+                            'list-${_workingDate.toIso8601String()}-$_onlyInside'),
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                        itemCount: list.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 12),
+                        itemBuilder: (context, i) =>
+                            _VisitorTile(visitor: list[i], onExit: _markExit),
+                      );
+                    }
                   }
-                  final list = snapshot.data ?? [];
-                  if (list.isEmpty) {
-                    return _EmptyView(onlyInside: _onlyInside, isToday: _isToday);
-                  }
-                  return ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-                    itemCount: list.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 12),
-                    itemBuilder: (context, i) =>
-                        _VisitorTile(visitor: list[i], onExit: _markExit),
+                  return AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 260),
+                    switchInCurve: Curves.easeOutCubic,
+                    child: child,
                   );
                 },
               ),
@@ -435,13 +461,13 @@ class _VisitorTile extends StatelessWidget {
                 ),
                 _MetaChip(
                   icon: Icons.login_rounded,
-                  label: 'In ${formatTime(visitor.entryTime)}',
+                  label: 'In ${formatClock(visitor.entryTime)}',
                   color: scheme.primary,
                 ),
                 if (!visitor.isInside)
                   _MetaChip(
                     icon: Icons.logout_rounded,
-                    label: 'Out ${formatTime(visitor.exitTime)}',
+                    label: 'Out ${formatClock(visitor.exitTime)}',
                     color: scheme.error,
                   ),
                 _MetaChip(
