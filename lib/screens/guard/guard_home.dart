@@ -48,7 +48,7 @@ class _GuardHomeState extends State<GuardHome> {
       lastDate: DateTime(now.year + 1),
       helpText: 'Select working date',
     );
-    if (picked != null) {
+    if (picked != null && mounted) {
       _workingDate = picked;
       _reload();
     }
@@ -142,7 +142,7 @@ class _GuardHomeState extends State<GuardHome> {
       floatingActionButton: _NewEntryFab(onTap: _addVisitor),
       body: Column(
         children: [
-          _DateBar(
+          WorkingDateBar(
             date: _workingDate,
             isToday: _isToday,
             onPick: _pickDate,
@@ -211,8 +211,9 @@ class _GuardHomeState extends State<GuardHome> {
 
 /// Working-date selector shown above the list. Tapping it opens a calendar;
 /// when the date is not today a subtle "not today" hint + quick reset appear.
-class _DateBar extends StatelessWidget {
-  const _DateBar({
+class WorkingDateBar extends StatelessWidget {
+  const WorkingDateBar({
+    super.key,
     required this.date,
     required this.isToday,
     required this.onPick,
@@ -253,25 +254,31 @@ class _DateBar extends StatelessWidget {
                                   ? scheme.primary
                                   : scheme.error),
                           const SizedBox(width: 10),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                isToday ? 'Today' : 'Working date',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
-                                    ?.copyWith(color: scheme.onSurfaceVariant),
-                              ),
-                              Text(
-                                formatDay(date),
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium,
-                              ),
-                            ],
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  isToday ? 'Today' : 'Working date',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(
+                                          color: scheme.onSurfaceVariant),
+                                ),
+                                Text(
+                                  formatDay(date),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium,
+                                ),
+                              ],
+                            ),
                           ),
-                          const Spacer(),
+                          const SizedBox(width: 8),
                           Icon(Icons.expand_more_rounded,
                               color: scheme.onSurfaceVariant),
                         ],
