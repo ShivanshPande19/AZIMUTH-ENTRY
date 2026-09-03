@@ -56,7 +56,6 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final brightness = Theme.of(context).brightness;
 
     return Scaffold(
       appBar: AppBar(title: const Text('New entry')),
@@ -68,54 +67,47 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // ---- Welcoming header --------------------------------------
+                // ---- Subtle, professional header ---------------------------
                 Container(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    gradient: AppTheme.brandGradient(brightness),
+                    color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(AppTheme.radius),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.seed.withValues(alpha: 0.28),
-                        blurRadius: 18,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
+                    border: Border.all(
+                      color: scheme.outlineVariant.withValues(alpha: 0.6),
+                    ),
                   ),
                   child: Row(
                     children: [
                       Container(
-                        width: 52,
-                        height: 52,
+                        width: 48,
+                        height: 48,
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(16),
+                          color: scheme.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        child: const Icon(Icons.person_add_alt_1_rounded,
-                            color: Colors.white, size: 28),
+                        child: Icon(Icons.person_add_alt_1_rounded,
+                            color: scheme.primary, size: 26),
                       ),
-                      const SizedBox(width: 16),
-                      const Expanded(
+                      const SizedBox(width: 14),
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               'Register a visitor',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 19,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: -0.3,
-                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w700),
                             ),
-                            SizedBox(height: 3),
+                            const SizedBox(height: 2),
                             Text(
                               'Fill in the details below to record the entry.',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
-                                height: 1.3,
-                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(color: scheme.onSurfaceVariant),
                             ),
                           ],
                         ),
