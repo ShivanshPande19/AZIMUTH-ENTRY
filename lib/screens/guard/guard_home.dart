@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/visitor.dart';
 import '../../services/auth_service.dart';
 import '../../services/visitor_service.dart';
+import '../../theme.dart';
 import '../../utils/format.dart';
 import 'add_visitor_screen.dart';
 
@@ -74,30 +75,42 @@ class _GuardHomeState extends State<GuardHome> {
         actions: [
           IconButton(
             tooltip: 'Sign out',
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout_rounded),
             onPressed: () => _auth.signOut(),
           ),
+          const SizedBox(width: 4),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addVisitor,
-        icon: const Icon(Icons.person_add_alt_1),
+        icon: const Icon(Icons.person_add_alt_1_rounded),
         label: const Text('New entry'),
       ),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-            child: SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(value: true, label: Text('Inside now')),
-                ButtonSegment(value: false, label: Text('All')),
-              ],
-              selected: {_onlyInside},
-              onSelectionChanged: (s) {
-                _onlyInside = s.first;
-                _reload();
-              },
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(
+                    value: true,
+                    label: Text('Inside now'),
+                    icon: Icon(Icons.meeting_room_rounded, size: 18),
+                  ),
+                  ButtonSegment(
+                    value: false,
+                    label: Text('All'),
+                    icon: Icon(Icons.list_alt_rounded, size: 18),
+                  ),
+                ],
+                selected: {_onlyInside},
+                onSelectionChanged: (s) {
+                  _onlyInside = s.first;
+                  _reload();
+                },
+              ),
             ),
           ),
           Expanded(
@@ -120,9 +133,9 @@ class _GuardHomeState extends State<GuardHome> {
                     return _EmptyView(onlyInside: _onlyInside);
                   }
                   return ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
                     itemCount: list.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
                     itemBuilder: (context, i) =>
                         _VisitorTile(visitor: list[i], onExit: _markExit),
                   );
@@ -145,93 +158,168 @@ class _VisitorTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final aColor = avatarColor(visitor.name, scheme);
+
     return Card(
-      margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                _Avatar(color: aColor, text: initialsOf(visitor.name)),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    visitor.name,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        visitor.name,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      if (visitor.company != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          visitor.company!,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 _StatusChip(inside: visitor.isInside),
               ],
             ),
-            if (visitor.company != null) ...[
-              const SizedBox(height: 2),
-              Text(visitor.company!,
-                  style: Theme.of(context).textTheme.bodyMedium),
-            ],
             if (visitor.purpose != null) ...[
-              const SizedBox(height: 2),
-              Text(visitor.purpose!,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: scheme.outline)),
+              const SizedBox(height: 10),
+              Text(
+                visitor.purpose!,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant),
+              ),
             ],
-            const Divider(height: 20),
-            Row(
+            const SizedBox(height: 14),
+            // ---- Meta chips -------------------------------------------------
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                Icon(Icons.phone_locked_outlined, size: 16, color: scheme.outline),
-                const SizedBox(width: 6),
-                Text(
-                  visitor.phoneMasked.isEmpty ? 'No number' : visitor.phoneMasked,
-                  style: TextStyle(
-                    fontFeatures: const [],
-                    letterSpacing: 1,
-                    color: scheme.outline,
+                _MetaChip(
+                  icon: Icons.phone_locked_outlined,
+                  label: visitor.phoneMasked.isEmpty
+                      ? 'No number'
+                      : visitor.phoneMasked,
+                  monospace: true,
+                ),
+                _MetaChip(
+                  icon: Icons.login_rounded,
+                  label: 'In ${formatTime(visitor.entryTime)}',
+                  color: scheme.primary,
+                ),
+                if (!visitor.isInside)
+                  _MetaChip(
+                    icon: Icons.logout_rounded,
+                    label: 'Out ${formatTime(visitor.exitTime)}',
+                    color: scheme.error,
                   ),
+                _MetaChip(
+                  icon: Icons.schedule_rounded,
+                  label: visitor.isInside
+                      ? formatDuration(visitor.entryTime, null)
+                      : formatDuration(visitor.entryTime, visitor.exitTime),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(Icons.login, size: 16, color: scheme.primary),
-                const SizedBox(width: 6),
-                Text('In: ${formatTime(visitor.entryTime)}'),
-                const Spacer(),
-                if (visitor.isInside)
-                  Text(formatDuration(visitor.entryTime, null),
-                      style: TextStyle(color: scheme.outline)),
-              ],
-            ),
-            if (!visitor.isInside) ...[
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Icon(Icons.logout, size: 16, color: scheme.error),
-                  const SizedBox(width: 6),
-                  Text('Out: ${formatTime(visitor.exitTime)}'),
-                  const Spacer(),
-                  Text(formatDuration(visitor.entryTime, visitor.exitTime),
-                      style: TextStyle(color: scheme.outline)),
-                ],
-              ),
-            ],
             if (visitor.isInside) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 14),
               Align(
                 alignment: Alignment.centerRight,
-                child: OutlinedButton.icon(
+                child: FilledButton.tonalIcon(
                   onPressed: () => onExit(visitor),
-                  icon: const Icon(Icons.logout, size: 18),
+                  icon: const Icon(Icons.logout_rounded, size: 18),
                   label: const Text('Mark exit'),
                 ),
               ),
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.color, required this.text});
+  final Color color;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 46,
+      height: 46,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w700,
+          fontSize: 16,
+        ),
+      ),
+    );
+  }
+}
+
+class _MetaChip extends StatelessWidget {
+  const _MetaChip({
+    required this.icon,
+    required this.label,
+    this.color,
+    this.monospace = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color? color;
+  final bool monospace;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final c = color ?? scheme.onSurfaceVariant;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: c),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: c,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              letterSpacing: monospace ? 1 : 0,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -244,16 +332,28 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final color = inside ? Colors.green : scheme.outline;
+    final color = inside ? const Color(0xFF10B981) : scheme.onSurfaceVariant;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: color.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(
-        inside ? 'Inside' : 'Left',
-        style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            inside ? 'Inside' : 'Left',
+            style: TextStyle(
+                color: color, fontWeight: FontWeight.w700, fontSize: 12),
+          ),
+        ],
       ),
     );
   }
@@ -265,22 +365,39 @@ class _EmptyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return ListView(
       children: [
-        const SizedBox(height: 120),
-        Icon(Icons.inbox_outlined,
-            size: 64, color: Theme.of(context).colorScheme.outline),
-        const SizedBox(height: 12),
+        const SizedBox(height: 100),
+        Center(
+          child: Container(
+            width: 96,
+            height: 96,
+            decoration: BoxDecoration(
+              color: scheme.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: Icon(Icons.inbox_rounded,
+                size: 48, color: scheme.primary.withValues(alpha: 0.7)),
+          ),
+        ),
+        const SizedBox(height: 20),
         Center(
           child: Text(
-            onlyInside
-                ? 'No visitors inside right now'
-                : 'No entries yet',
+            onlyInside ? 'No visitors inside right now' : 'No entries yet',
             style: Theme.of(context).textTheme.titleMedium,
           ),
         ),
         const SizedBox(height: 6),
-        const Center(child: Text('Tap "New entry" to add a visitor')),
+        Center(
+          child: Text(
+            'Tap “New entry” to add a visitor',
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+        ),
       ],
     );
   }
@@ -293,15 +410,22 @@ class _ErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return ListView(
       children: [
-        const SizedBox(height: 120),
-        const Icon(Icons.error_outline, size: 56),
-        const SizedBox(height: 12),
-        Center(child: Text(message, textAlign: TextAlign.center)),
-        const SizedBox(height: 16),
+        const SizedBox(height: 100),
         Center(
-          child: FilledButton(onPressed: onRetry, child: const Text('Retry')),
+          child: Icon(Icons.error_outline_rounded, size: 56, color: scheme.error),
+        ),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Text(message, textAlign: TextAlign.center),
+        ),
+        const SizedBox(height: 20),
+        Center(
+          child: FilledButton.tonal(
+              onPressed: onRetry, child: const Text('Retry')),
         ),
       ],
     );
