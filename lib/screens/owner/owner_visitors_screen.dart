@@ -63,8 +63,10 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
       _error = null;
     });
     try {
+      // While searching, look across ALL dates; otherwise scope to the day.
+      final searching = _query.trim().isNotEmpty;
       final res = await _service.listVisitorsPage(
-        day: _filterDate,
+        day: searching ? null : _filterDate,
         search: _query,
         page: _page,
         pageSize: _pageSize,
@@ -292,12 +294,17 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
             ),
           ),
         ),
-        _DateFilterBar(
-          date: _filterDate,
-          isToday: _isToday,
-          onPick: _pickFilterDate,
-          onToday: _goToday,
-        ),
+        // When searching we scan all dates, so the day selector is replaced
+        // by a small hint; otherwise show the guard-style date bar.
+        if (_query.trim().isEmpty)
+          _DateFilterBar(
+            date: _filterDate,
+            isToday: _isToday,
+            onPick: _pickFilterDate,
+            onToday: _goToday,
+          )
+        else
+          const _SearchScopeHint(),
         Expanded(child: _buildBody()),
         if (!_loading && _error == null && _total > 0) _buildPaginationBar(),
       ],
@@ -407,6 +414,33 @@ class _HeaderRow extends _Row {
 class _VisitorRow extends _Row {
   const _VisitorRow(this.visitor);
   final Visitor visitor;
+}
+
+// ---- Hint shown while searching (results span all dates) -------------------
+class _SearchScopeHint extends StatelessWidget {
+  const _SearchScopeHint();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Row(
+        children: [
+          Icon(Icons.travel_explore_rounded,
+              size: 16, color: scheme.primary),
+          const SizedBox(width: 8),
+          Text(
+            'Searching across all dates',
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ---- Date selector (matches the guard's working-date bar) ------------------
