@@ -8,8 +8,8 @@ import 'package:flutter/material.dart';
 class AppTheme {
   AppTheme._();
 
-  /// Brand seed colour — a confident, professional blue.
-  static const Color seed = Color(0xFF2563EB);
+  /// Brand seed colour — a rich, modern indigo (premium but not loud).
+  static const Color seed = Color(0xFF4F46E5);
   static const Color accent = Color(0xFF0EA5E9);
 
   static const double radius = 18;
@@ -33,7 +33,7 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: scheme,
       scaffoldBackgroundColor:
-          isDark ? const Color(0xFF0F1115) : const Color(0xFFF6F7FB),
+          isDark ? const Color(0xFF0F1115) : const Color(0xFFF3F4FB),
       splashFactory: InkSparkle.splashFactory,
 
       textTheme: baseText.copyWith(
@@ -52,7 +52,7 @@ class AppTheme {
 
       appBarTheme: AppBarTheme(
         backgroundColor:
-            isDark ? const Color(0xFF0F1115) : const Color(0xFFF6F7FB),
+            isDark ? const Color(0xFF0F1115) : const Color(0xFFF3F4FB),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0.5,
@@ -66,15 +66,17 @@ class AppTheme {
       ),
 
       cardTheme: CardThemeData(
-        elevation: 0,
+        // A touch of elevation in light mode gives the cards gentle depth
+        // (less flat / dull); dark mode relies on a hairline border instead.
+        elevation: isDark ? 0 : 1.5,
         margin: EdgeInsets.zero,
         color: scheme.surface,
         surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.black.withValues(alpha: 0.08),
+        shadowColor: seed.withValues(alpha: 0.14),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radius),
           side: BorderSide(
-            color: scheme.outlineVariant.withValues(alpha: isDark ? 0.4 : 0.7),
+            color: scheme.outlineVariant.withValues(alpha: isDark ? 0.4 : 0.5),
           ),
         ),
       ),
@@ -185,7 +187,7 @@ class AppTheme {
     return const LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFF2563EB), Color(0xFF1E40AF)],
+      colors: [Color(0xFF4F46E5), Color(0xFF4338CA)],
     );
   }
 }

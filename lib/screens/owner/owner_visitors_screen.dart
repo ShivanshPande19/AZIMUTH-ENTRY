@@ -351,47 +351,105 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
     final canPrev = _page > 0;
     final canNext = _page < _pageCount - 1;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        border: Border(
-          top: BorderSide(
-              color: scheme.outlineVariant.withValues(alpha: 0.7)),
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: scheme.outlineVariant.withValues(alpha: 0.5)),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.seed.withValues(alpha: 0.12),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-      ),
-      child: SafeArea(
-        top: false,
         child: Row(
           children: [
-            const SizedBox(width: 4),
-            Text(
-              '$from–$to of $_total',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-            const Spacer(),
-            IconButton(
+            _PageArrow(
+              icon: Icons.chevron_left_rounded,
               tooltip: 'Previous page',
-              onPressed: canPrev ? () => _goToPage(_page - 1) : null,
-              icon: const Icon(Icons.chevron_left_rounded),
+              enabled: canPrev,
+              onTap: () => _goToPage(_page - 1),
             ),
-            Text(
-              'Page ${_page + 1} of $_pageCount',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Page ${_page + 1} of $_pageCount',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    '$from–$to of $_total',
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelSmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
             ),
-            IconButton(
+            _PageArrow(
+              icon: Icons.chevron_right_rounded,
               tooltip: 'Next page',
-              onPressed: canNext ? () => _goToPage(_page + 1) : null,
-              icon: const Icon(Icons.chevron_right_rounded),
+              enabled: canNext,
+              onTap: () => _goToPage(_page + 1),
             ),
-            const SizedBox(width: 4),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Rounded, tonal arrow button for the pagination pill.
+class _PageArrow extends StatelessWidget {
+  const _PageArrow({
+    required this.icon,
+    required this.tooltip,
+    required this.enabled,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String tooltip;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: enabled
+            ? scheme.primary.withValues(alpha: 0.12)
+            : scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: enabled ? onTap : null,
+          child: SizedBox(
+            width: 52,
+            height: 44,
+            child: Center(
+              child: Icon(
+                icon,
+                color: enabled
+                    ? scheme.primary
+                    : scheme.onSurfaceVariant.withValues(alpha: 0.4),
+              ),
+            ),
+          ),
         ),
       ),
     );
