@@ -25,6 +25,7 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
 
   late Future<List<Visitor>> _future;
   String _query = '';
+  DateTime? _filterDate; // null = show all dates
 
   @override
   void initState() {
@@ -146,28 +147,53 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
     );
   }
 
-  List<Visitor> _filter(List<Visitor> all) {
-    if (_query.trim().isEmpty) return all;
-    final q = _query.toLowerCase();
-    return all
-        .where((v) =>
-            v.name.toLowerCase().contains(q) ||
-            (v.company ?? '').toLowerCase().contains(q))
-        .toList();
+  List<Visitor> _applyFilters(List<Visitor> all) {
+    var result = all;
+    if (_filterDate != null) {
+      result =
+          result.where((v) => isSameDay(v.entryTime, _filterDate!)).toList();
+    }
+    final q = _query.trim().toLowerCase();
+    if (q.isNotEmpty) {
+      result = result
+          .where((v) =>
+              v.name.toLowerCase().contains(q) ||
+              (v.company ?? '').toLowerCase().contains(q))
+          .toList();
+    }
+    return result;
   }
 
+  Future<void> _pickFilterDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _filterDate ?? now,
+      firstDate: DateTime(now.year - 3),
+      lastDate: now,
+      helpText: 'Show visitors on',
+    );
+    if (picked != null && mounted) {
+      setState(() => _filterDate = picked);
+    }
+  }
+
+  void _clearFilterDate() => setState(() => _filterDate = null);
+
   /// Flatten the visitor list into a stats header + per-day sections.
-  List<_Row> _buildRows(List<Visitor> list) {
+  List<_Row> _buildRows(List<Visitor> list, {required bool showStats}) {
     final now = DateTime.now();
     final rows = <_Row>[];
 
-    final todayCount = list.where((v) => isSameDay(v.entryTime, now)).length;
-    final insideCount = list.where((v) => v.isInside).length;
-    rows.add(_StatsRow(
-      today: todayCount,
-      inside: insideCount,
-      total: list.length,
-    ));
+    if (showStats) {
+      final todayCount = list.where((v) => isSameDay(v.entryTime, now)).length;
+      final insideCount = list.where((v) => v.isInside).length;
+      rows.add(_StatsRow(
+        today: todayCount,
+        inside: insideCount,
+        total: list.length,
+      ));
+    }
 
     // Count per day for the header badges.
     final counts = <DateTime, int>{};
@@ -218,6 +244,11 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
             ),
           ),
         ),
+        _DateFilterBar(
+          date: _filterDate,
+          onPick: _pickFilterDate,
+          onClear: _clearFilterDate,
+        ),
         Expanded(
           child: RefreshIndicator(
             onRefresh: () async => _reload(),
@@ -231,11 +262,14 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
                   return _ErrorView(
                       message: '${snapshot.error}', onRetry: _reload);
                 }
-                final list = _filter(snapshot.data ?? []);
+                final list = _applyFilters(snapshot.data ?? []);
                 if (list.isEmpty) {
-                  return _EmptyView(searching: _query.trim().isNotEmpty);
+                  return _EmptyView(
+                    searching: _query.trim().isNotEmpty,
+                    dateFiltered: _filterDate != null,
+                  );
                 }
-                final rows = _buildRows(list);
+                final rows = _buildRows(list, showStats: _filterDate == null);
                 return ListView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
                   itemCount: rows.length,
@@ -296,6 +330,80 @@ class _HeaderRow extends _Row {
 class _VisitorRow extends _Row {
   const _VisitorRow(this.visitor);
   final Visitor visitor;
+}
+
+// ---- Date filter bar -------------------------------------------------------
+class _DateFilterBar extends StatelessWidget {
+  const _DateFilterBar(
+      {required this.date, required this.onPick, required this.onClear});
+  final DateTime? date;
+  final VoidCallback onPick;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final active = date != null;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Material(
+              color: active
+                  ? scheme.primary.withValues(alpha: 0.10)
+                  : scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: onPick,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.calendar_month_rounded,
+                          size: 20,
+                          color: active
+                              ? scheme.primary
+                              : scheme.onSurfaceVariant),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          active ? relativeDayLabel(date!) : 'All dates',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleSmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: active
+                                    ? scheme.primary
+                                    : scheme.onSurface,
+                              ),
+                        ),
+                      ),
+                      Icon(Icons.expand_more_rounded,
+                          color: scheme.onSurfaceVariant),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (active) ...[
+            const SizedBox(width: 8),
+            IconButton.filledTonal(
+              tooltip: 'Show all dates',
+              onPressed: onClear,
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 // ---- Summary strip ---------------------------------------------------------
@@ -590,26 +698,35 @@ class _Avatar extends StatelessWidget {
 }
 
 class _EmptyView extends StatelessWidget {
-  const _EmptyView({required this.searching});
+  const _EmptyView({required this.searching, this.dateFiltered = false});
   final bool searching;
+  final bool dateFiltered;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final IconData icon;
+    final String message;
+    if (searching) {
+      icon = Icons.search_off_rounded;
+      message = 'No matching visitors';
+    } else if (dateFiltered) {
+      icon = Icons.event_busy_rounded;
+      message = 'No visitors on this date';
+    } else {
+      icon = Icons.people_outline_rounded;
+      message = 'No visitors yet';
+    }
     return ListView(
       children: [
         const SizedBox(height: 120),
         Center(
-          child: Icon(
-            searching ? Icons.search_off_rounded : Icons.people_outline_rounded,
-            size: 64,
-            color: scheme.onSurfaceVariant,
-          ),
+          child: Icon(icon, size: 64, color: scheme.onSurfaceVariant),
         ),
         const SizedBox(height: 12),
         Center(
           child: Text(
-            searching ? 'No matching visitors' : 'No visitors yet',
+            message,
             style: Theme.of(context).textTheme.titleMedium,
           ),
         ),
