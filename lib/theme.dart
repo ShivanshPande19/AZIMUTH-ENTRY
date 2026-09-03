@@ -202,6 +202,18 @@ class AppTheme {
         color: scheme.outlineVariant.withValues(alpha: 0.6),
         thickness: 1,
       ),
+
+      // Smooth, premium page transitions on every platform (Material 3
+      // forwards/backwards fade-through).
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.iOS: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.macOS: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
+          TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
+        },
+      ),
     );
   }
 

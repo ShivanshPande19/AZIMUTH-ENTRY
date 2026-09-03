@@ -32,13 +32,21 @@ String relativeDayLabel(DateTime day, {DateTime? now}) {
   return day.year == n.year ? _dayFmt.format(day) : _dayWithYearFmt.format(day);
 }
 
-/// Human-friendly duration, e.g. "2h 15m".
+/// Human-friendly duration, e.g. "15m", "2h 15m", "1d 3h".
+///
+/// Robust to clock skew (a slightly-in-the-future start is clamped to zero) and
+/// to long/overnight stays (shows days).
 String formatDuration(DateTime start, DateTime? end) {
   final to = end ?? DateTime.now();
-  final d = to.difference(start);
+  var d = to.difference(start);
+  if (d.isNegative) d = Duration.zero;
   if (d.inMinutes < 1) return 'just now';
-  final h = d.inHours;
-  final m = d.inMinutes % 60;
-  if (h == 0) return '${m}m';
-  return '${h}h ${m}m';
+
+  final days = d.inDays;
+  final hours = d.inHours % 24;
+  final minutes = d.inMinutes % 60;
+
+  if (days > 0) return hours > 0 ? '${days}d ${hours}h' : '${days}d';
+  if (d.inHours > 0) return '${d.inHours}h ${minutes}m';
+  return '${minutes}m';
 }
