@@ -8,9 +8,9 @@ import 'package:flutter/material.dart';
 class AppTheme {
   AppTheme._();
 
-  /// Brand seed colour — a modern indigo.
-  static const Color seed = Color(0xFF4F46E5);
-  static const Color accent = Color(0xFF06B6D4);
+  /// Brand seed colour — a confident, professional blue.
+  static const Color seed = Color(0xFF2563EB);
+  static const Color accent = Color(0xFF0EA5E9);
 
   static const double radius = 18;
   static const double fieldRadius = 14;
@@ -176,12 +176,12 @@ class AppTheme {
     );
   }
 
-  /// A soft brand gradient used on hero / header areas.
+  /// A restrained, single-hue brand gradient for hero / header areas.
   static LinearGradient brandGradient(Brightness brightness) {
     return const LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFF4F46E5), Color(0xFF7C3AED), Color(0xFF06B6D4)],
+      colors: [Color(0xFF2563EB), Color(0xFF1E40AF)],
     );
   }
 }
@@ -189,14 +189,12 @@ class AppTheme {
 /// Deterministic soft avatar colour from a name/string.
 Color avatarColor(String seedStr, ColorScheme scheme) {
   const palette = [
-    Color(0xFF4F46E5),
-    Color(0xFF7C3AED),
-    Color(0xFF06B6D4),
-    Color(0xFF0EA5E9),
-    Color(0xFFEC4899),
-    Color(0xFFF59E0B),
-    Color(0xFF10B981),
-    Color(0xFFEF4444),
+    Color(0xFF2563EB), // blue
+    Color(0xFF0EA5E9), // sky
+    Color(0xFF0D9488), // teal
+    Color(0xFF4F46E5), // indigo
+    Color(0xFF64748B), // slate
+    Color(0xFF7C3AED), // violet
   ];
   if (seedStr.isEmpty) return scheme.primary;
   final idx = seedStr.codeUnits.fold<int>(0, (a, b) => a + b) % palette.length;

@@ -29,10 +29,23 @@ class VisitorService {
   }
 
   /// List visitors, newest first. Contains only masked phone numbers.
-  Future<List<Visitor>> listVisitors({bool onlyInside = false}) async {
+  ///
+  /// [day] optionally restricts results to entries whose entry_time falls on
+  /// that calendar day (local time).
+  Future<List<Visitor>> listVisitors({
+    bool onlyInside = false,
+    DateTime? day,
+  }) async {
     var query = _client.from('visitors').select();
     if (onlyInside) {
       query = query.filter('exit_time', 'is', null);
+    }
+    if (day != null) {
+      final start = DateTime(day.year, day.month, day.day);
+      final end = start.add(const Duration(days: 1));
+      query = query
+          .gte('entry_time', start.toUtc().toIso8601String())
+          .lt('entry_time', end.toUtc().toIso8601String());
     }
     final rows = await query.order('entry_time', ascending: false);
     return (rows as List)
