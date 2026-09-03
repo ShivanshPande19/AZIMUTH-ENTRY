@@ -61,6 +61,39 @@ class VisitorService {
         .toList();
   }
 
+  /// Fetch one page of visitors plus the total count for the current filter,
+  /// so the UI can show classic numbered pages (Page N of M).
+  Future<({List<Visitor> items, int total})> listVisitorsPage({
+    DateTime? day,
+    String? search,
+    required int page,
+    required int pageSize,
+  }) async {
+    final from = page * pageSize;
+    final to = from + pageSize - 1;
+
+    var query = _client.from('visitors').select();
+    if (day != null) {
+      final start = DateTime(day.year, day.month, day.day);
+      final end = start.add(const Duration(days: 1));
+      query = query
+          .gte('entry_time', start.toUtc().toIso8601String())
+          .lt('entry_time', end.toUtc().toIso8601String());
+    }
+    final q = (search ?? '').trim().replaceAll(RegExp(r'[%,()]'), ' ').trim();
+    if (q.isNotEmpty) {
+      query = query.or('name.ilike.%$q%,company.ilike.%$q%');
+    }
+
+    final res = await query
+        .order('entry_time', ascending: false)
+        .range(from, to)
+        .count(CountOption.exact);
+
+    final items = res.data.map((r) => Visitor.fromMap(r)).toList();
+    return (items: items, total: res.count);
+  }
+
   Future<void> markExit(String visitorId) async {
     await _client.rpc('mark_exit', params: {'p_visitor_id': visitorId});
   }

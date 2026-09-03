@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -6,16 +8,12 @@ import '../../services/visitor_service.dart';
 import '../../theme.dart';
 import '../../utils/format.dart';
 
-/// Owner's view of the full register, presented as a light dashboard:
-/// a summary strip, a working-date selector, then visitors grouped by the day
-/// they arrived (Today / Yesterday / dated sections).
+/// Owner's view of the register, paged like an email inbox: one page of results
+/// at a time with Previous / Next controls and a "Page N of M" indicator.
+/// Within a page, visitors are grouped by the day they arrived.
 ///
-/// The register is loaded a page at a time (infinite scroll) so it scales to
-/// large numbers of visitors without fetching everything up front, and the
-/// list renders lazily.
-///
-/// Phone numbers stay masked until the owner taps "Reveal", which fetches the
-/// real number and records an audit entry on the server.
+/// Date filtering and search are applied server-side; the page count comes from
+/// an exact row count, so navigation is accurate for large registers.
 class OwnerVisitorsScreen extends StatefulWidget {
   const OwnerVisitorsScreen({super.key});
 
@@ -24,81 +22,93 @@ class OwnerVisitorsScreen extends StatefulWidget {
 }
 
 class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
-  static const int _pageSize = 30;
+  static const int _pageSize = 25;
 
   final _service = VisitorService();
   final _searchCtrl = TextEditingController();
   final _scroll = ScrollController();
+  Timer? _debounce;
 
-  final List<Visitor> _items = [];
+  List<Visitor> _items = [];
+  int _page = 0;
+  int _total = 0;
   String _query = '';
   DateTime? _filterDate = DateTime.now(); // defaults to today; null = all dates
 
-  bool _initialLoading = true;
-  bool _loadingMore = false;
-  bool _hasMore = true;
+  bool _loading = true;
   Object? _error;
+
+  int get _pageCount =>
+      _total == 0 ? 1 : ((_total + _pageSize - 1) ~/ _pageSize);
 
   @override
   void initState() {
     super.initState();
-    _scroll.addListener(_onScroll);
-    _reload();
+    _load();
   }
 
   @override
   void dispose() {
-    _scroll.removeListener(_onScroll);
+    _debounce?.cancel();
     _scroll.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
 
-  void _onScroll() {
-    if (_scroll.position.pixels >=
-        _scroll.position.maxScrollExtent - 320) {
-      _loadMore();
-    }
-  }
-
-  Future<void> _reload() async {
+  Future<void> _load() async {
     setState(() {
-      _initialLoading = true;
+      _loading = true;
       _error = null;
-      _items.clear();
-      _hasMore = true;
     });
-    await _loadPage(reset: true);
-  }
-
-  Future<void> _loadPage({bool reset = false}) async {
     try {
-      final page = await _service.listVisitors(
+      final res = await _service.listVisitorsPage(
         day: _filterDate,
-        limit: _pageSize,
-        offset: reset ? 0 : _items.length,
+        search: _query,
+        page: _page,
+        pageSize: _pageSize,
       );
       if (!mounted) return;
       setState(() {
-        _items.addAll(page);
-        _hasMore = page.length == _pageSize;
-        _initialLoading = false;
-        _loadingMore = false;
+        _items = res.items;
+        _total = res.total;
+        _loading = false;
       });
+      if (_scroll.hasClients) _scroll.jumpTo(0);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _error = e;
-        _initialLoading = false;
-        _loadingMore = false;
+        _loading = false;
       });
     }
   }
 
-  Future<void> _loadMore() async {
-    if (_loadingMore || !_hasMore || _initialLoading) return;
-    setState(() => _loadingMore = true);
-    await _loadPage();
+  void _onSearchChanged(String v) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      setState(() {
+        _query = v;
+        _page = 0;
+      });
+      _load();
+    });
+  }
+
+  void _clearSearch() {
+    _debounce?.cancel();
+    _searchCtrl.clear();
+    setState(() {
+      _query = '';
+      _page = 0;
+    });
+    _load();
+  }
+
+  void _goToPage(int p) {
+    if (p < 0 || p >= _pageCount || p == _page) return;
+    setState(() => _page = p);
+    _load();
   }
 
   Future<void> _pickFilterDate() async {
@@ -111,14 +121,20 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
       helpText: 'Show visitors on',
     );
     if (picked != null && mounted) {
-      setState(() => _filterDate = picked);
-      _reload();
+      setState(() {
+        _filterDate = picked;
+        _page = 0;
+      });
+      _load();
     }
   }
 
   void _clearFilterDate() {
-    setState(() => _filterDate = null);
-    _reload();
+    setState(() {
+      _filterDate = null;
+      _page = 0;
+    });
+    _load();
   }
 
   Future<void> _reveal(Visitor v) async {
@@ -162,8 +178,8 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
                     text: initialsOf(v.name)),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(v.name,
-                      style: Theme.of(ctx).textTheme.titleLarge),
+                  child:
+                      Text(v.name, style: Theme.of(ctx).textTheme.titleLarge),
                 ),
               ],
             ),
@@ -223,31 +239,10 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
     );
   }
 
-  /// Client-side search over the loaded items (date filtering is server-side).
-  List<Visitor> _search(List<Visitor> all) {
-    final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return all;
-    return all
-        .where((v) =>
-            v.name.toLowerCase().contains(q) ||
-            (v.company ?? '').toLowerCase().contains(q))
-        .toList();
-  }
-
-  /// Flatten into an optional stats row + per-day sections + a trailing loader.
-  List<_Row> _buildRows(List<Visitor> list, {required bool showStats}) {
+  /// Group the current page's visitors into per-day sections.
+  List<_Row> _buildRows(List<Visitor> list) {
     final now = DateTime.now();
     final rows = <_Row>[];
-
-    if (showStats) {
-      final todayCount = list.where((v) => isSameDay(v.entryTime, now)).length;
-      final insideCount = list.where((v) => v.isInside).length;
-      rows.add(_StatsRow(
-        today: todayCount,
-        inside: insideCount,
-        total: list.length,
-      ));
-    }
 
     final counts = <DateTime, int>{};
     for (final v in list) {
@@ -270,8 +265,6 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
       }
       rows.add(_VisitorRow(v));
     }
-
-    if (_hasMore) rows.add(const _LoaderRow());
     return rows;
   }
 
@@ -283,18 +276,15 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           child: TextField(
             controller: _searchCtrl,
-            onChanged: (v) => setState(() => _query = v),
+            onChanged: _onSearchChanged,
             decoration: InputDecoration(
               hintText: 'Search name or company',
               prefixIcon: const Icon(Icons.search_rounded),
-              suffixIcon: _query.isEmpty
+              suffixIcon: _searchCtrl.text.isEmpty
                   ? null
                   : IconButton(
                       icon: const Icon(Icons.clear_rounded),
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        setState(() => _query = '');
-                      },
+                      onPressed: _clearSearch,
                     ),
             ),
           ),
@@ -305,82 +295,101 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
           onClear: _clearFilterDate,
         ),
         Expanded(child: _buildBody()),
+        if (!_loading && _error == null && _total > 0) _buildPaginationBar(),
       ],
     );
   }
 
   Widget _buildBody() {
-    if (_initialLoading) {
+    if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_error != null && _items.isEmpty) {
-      return _ErrorView(message: '$_error', onRetry: _reload);
+    if (_error != null) {
+      return _ErrorView(message: '$_error', onRetry: _load);
     }
-
-    final list = _search(_items);
-    final showStats = _filterDate == null && _query.trim().isEmpty;
-    final rows = _buildRows(list, showStats: showStats);
-
-    return RefreshIndicator(
-      onRefresh: _reload,
-      child: list.isEmpty
-          ? _EmptyView(
-              searching: _query.trim().isNotEmpty,
-              dateFiltered: _filterDate != null,
-            )
-          : ListView.builder(
-              controller: _scroll,
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
-              itemCount: rows.length,
-              itemBuilder: (context, i) {
-                final row = rows[i];
-                return switch (row) {
-                  _StatsRow() => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _StatsStrip(
-                        today: row.today,
-                        inside: row.inside,
-                        total: row.total,
-                      ),
-                    ),
-                  _HeaderRow() => _DayHeader(
-                      label: row.label,
-                      count: row.count,
-                      isToday: row.isToday,
-                    ),
-                  _VisitorRow() => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _OwnerVisitorTile(
-                          visitor: row.visitor, onReveal: _reveal),
-                    ),
-                  _LoaderRow() => const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 20),
-                      child: Center(
-                        child: SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2.4),
-                        ),
-                      ),
-                    ),
-                };
-              },
+    if (_items.isEmpty) {
+      return _EmptyView(
+        searching: _query.trim().isNotEmpty,
+        dateFiltered: _filterDate != null,
+      );
+    }
+    final rows = _buildRows(_items);
+    return ListView.builder(
+      controller: _scroll,
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      itemCount: rows.length,
+      itemBuilder: (context, i) {
+        final row = rows[i];
+        return switch (row) {
+          _HeaderRow() => _DayHeader(
+              label: row.label, count: row.count, isToday: row.isToday),
+          _VisitorRow() => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child:
+                  _OwnerVisitorTile(visitor: row.visitor, onReveal: _reveal),
             ),
+        };
+      },
+    );
+  }
+
+  Widget _buildPaginationBar() {
+    final scheme = Theme.of(context).colorScheme;
+    final from = _page * _pageSize + 1;
+    final to = (_page * _pageSize + _items.length);
+    final canPrev = _page > 0;
+    final canNext = _page < _pageCount - 1;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border(
+          top: BorderSide(
+              color: scheme.outlineVariant.withValues(alpha: 0.7)),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            const SizedBox(width: 4),
+            Text(
+              '$from–$to of $_total',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+            const Spacer(),
+            IconButton(
+              tooltip: 'Previous page',
+              onPressed: canPrev ? () => _goToPage(_page - 1) : null,
+              icon: const Icon(Icons.chevron_left_rounded),
+            ),
+            Text(
+              'Page ${_page + 1} of $_pageCount',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            IconButton(
+              tooltip: 'Next page',
+              onPressed: canNext ? () => _goToPage(_page + 1) : null,
+              icon: const Icon(Icons.chevron_right_rounded),
+            ),
+            const SizedBox(width: 4),
+          ],
+        ),
+      ),
     );
   }
 }
 
-// ---- Row model for the flattened, grouped list ----------------------------
+// ---- Row model for the grouped list ---------------------------------------
 sealed class _Row {
   const _Row();
-}
-
-class _StatsRow extends _Row {
-  const _StatsRow(
-      {required this.today, required this.inside, required this.total});
-  final int today;
-  final int inside;
-  final int total;
 }
 
 class _HeaderRow extends _Row {
@@ -394,10 +403,6 @@ class _HeaderRow extends _Row {
 class _VisitorRow extends _Row {
   const _VisitorRow(this.visitor);
   final Visitor visitor;
-}
-
-class _LoaderRow extends _Row {
-  const _LoaderRow();
 }
 
 // ---- Date selector (styled to match the guard's working-date bar) ----------
@@ -497,107 +502,6 @@ class _DateFilterBar extends StatelessWidget {
   }
 }
 
-// ---- Summary strip ---------------------------------------------------------
-class _StatsStrip extends StatelessWidget {
-  const _StatsStrip(
-      {required this.today, required this.inside, required this.total});
-  final int today;
-  final int inside;
-  final int total;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Expanded(
-          child: _StatCard(
-            icon: Icons.today_rounded,
-            label: 'Today',
-            value: '$today',
-            color: scheme.primary,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _StatCard(
-            icon: Icons.meeting_room_rounded,
-            label: 'Inside now',
-            value: '$inside',
-            color: const Color(0xFF10B981),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _StatCard(
-            icon: Icons.groups_rounded,
-            label: 'Total',
-            value: '$total',
-            color: scheme.tertiary,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  const _StatCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border:
-            Border.all(color: scheme.outlineVariant.withValues(alpha: 0.7)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, size: 18, color: color),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            value,
-            style: Theme.of(context)
-                .textTheme
-                .headlineSmall
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: scheme.onSurfaceVariant),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ---- Day section header ----------------------------------------------------
 class _DayHeader extends StatelessWidget {
   const _DayHeader(
@@ -611,7 +515,7 @@ class _DayHeader extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final accent = isToday ? scheme.primary : scheme.onSurfaceVariant;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 18, 2, 10),
+      padding: const EdgeInsets.fromLTRB(2, 14, 2, 10),
       child: Row(
         children: [
           Container(
@@ -642,8 +546,8 @@ class _DayHeader extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Divider(
-                color: scheme.outlineVariant.withValues(alpha: 0.6)),
+            child:
+                Divider(color: scheme.outlineVariant.withValues(alpha: 0.6)),
           ),
         ],
       ),
@@ -813,8 +717,8 @@ class _EmptyView extends StatelessWidget {
         Center(child: Icon(icon, size: 64, color: scheme.onSurfaceVariant)),
         const SizedBox(height: 12),
         Center(
-          child: Text(message,
-              style: Theme.of(context).textTheme.titleMedium),
+          child:
+              Text(message, style: Theme.of(context).textTheme.titleMedium),
         ),
       ],
     );
