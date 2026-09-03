@@ -19,7 +19,10 @@ class _GuardHomeState extends State<GuardHome> {
   final _auth = AuthService();
 
   bool _onlyInside = true;
+  DateTime _workingDate = DateTime.now();
   late Future<List<Visitor>> _future;
+
+  bool get _isToday => isSameDay(_workingDate, DateTime.now());
 
   @override
   void initState() {
@@ -29,11 +32,66 @@ class _GuardHomeState extends State<GuardHome> {
 
   void _reload() {
     setState(() {
-      _future = _service.listVisitors(onlyInside: _onlyInside);
+      _future = _service.listVisitors(
+        onlyInside: _onlyInside,
+        day: _workingDate,
+      );
     });
   }
 
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _workingDate,
+      firstDate: DateTime(now.year - 2),
+      lastDate: DateTime(now.year + 1),
+      helpText: 'Select working date',
+    );
+    if (picked != null) {
+      _workingDate = picked;
+      _reload();
+    }
+  }
+
+  void _goToday() {
+    _workingDate = DateTime.now();
+    _reload();
+  }
+
   Future<void> _addVisitor() async {
+    // Blocker: entries may only be recorded for today. If the guard left the
+    // working date on another day, warn instead of silently saving it wrong.
+    if (!_isToday) {
+      final switchToday = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: Icon(Icons.event_busy_rounded,
+              color: Theme.of(ctx).colorScheme.error, size: 32),
+          title: const Text('Correct date not selected'),
+          content: Text(
+            'The working date is set to ${formatFullDay(_workingDate)}, '
+            'not today (${formatFullDay(DateTime.now())}).\n\n'
+            'New entries can only be recorded for today. Switch to today to '
+            'continue.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Switch to today'),
+            ),
+          ],
+        ),
+      );
+      if (switchToday != true) return;
+      _goToday();
+    }
+
+    if (!mounted) return;
     final added = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => const AddVisitorScreen()),
     );
@@ -84,6 +142,12 @@ class _GuardHomeState extends State<GuardHome> {
       floatingActionButton: _NewEntryFab(onTap: _addVisitor),
       body: Column(
         children: [
+          _DateBar(
+            date: _workingDate,
+            isToday: _isToday,
+            onPick: _pickDate,
+            onToday: _goToday,
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
             child: SizedBox(
@@ -126,7 +190,7 @@ class _GuardHomeState extends State<GuardHome> {
                   }
                   final list = snapshot.data ?? [];
                   if (list.isEmpty) {
-                    return _EmptyView(onlyInside: _onlyInside);
+                    return _EmptyView(onlyInside: _onlyInside, isToday: _isToday);
                   }
                   return ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
@@ -145,49 +209,148 @@ class _GuardHomeState extends State<GuardHome> {
   }
 }
 
-/// Modern gradient "New entry" action button — icon + short label, soft shadow
-/// and an ink splash, sitting above the content.
+/// Working-date selector shown above the list. Tapping it opens a calendar;
+/// when the date is not today a subtle "not today" hint + quick reset appear.
+class _DateBar extends StatelessWidget {
+  const _DateBar({
+    required this.date,
+    required this.isToday,
+    required this.onPick,
+    required this.onToday,
+  });
+
+  final DateTime date;
+  final bool isToday;
+  final VoidCallback onPick;
+  final VoidCallback onToday;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Material(
+                  color: isToday
+                      ? scheme.surfaceContainerHighest.withValues(alpha: 0.5)
+                      : scheme.errorContainer.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(14),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: onPick,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.calendar_month_rounded,
+                              size: 20,
+                              color: isToday
+                                  ? scheme.primary
+                                  : scheme.error),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isToday ? 'Today' : 'Working date',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(color: scheme.onSurfaceVariant),
+                              ),
+                              Text(
+                                formatDay(date),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium,
+                              ),
+                            ],
+                          ),
+                          const Spacer(),
+                          Icon(Icons.expand_more_rounded,
+                              color: scheme.onSurfaceVariant),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (!isToday) ...[
+                const SizedBox(width: 8),
+                FilledButton.tonalIcon(
+                  onPressed: onToday,
+                  icon: const Icon(Icons.today_rounded, size: 18),
+                  label: const Text('Today'),
+                ),
+              ],
+            ],
+          ),
+          if (!isToday)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded,
+                      size: 15, color: scheme.error),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Not today — new entries are blocked until you switch back.',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: scheme.error),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Modern, solid "New entry" action button — icon + short label, rounded with
+/// a soft shadow and an ink splash.
 class _NewEntryFab extends StatelessWidget {
   const _NewEntryFab({required this.onTap});
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: AppTheme.brandGradient(Theme.of(context).brightness),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.seed.withValues(alpha: 0.45),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: onTap,
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.person_add_alt_1_rounded, color: Colors.white),
-                SizedBox(width: 10),
-                Text(
-                  'New entry',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    letterSpacing: 0.2,
-                  ),
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.primary,
+      borderRadius: BorderRadius.circular(18),
+      elevation: 3,
+      shadowColor: scheme.primary.withValues(alpha: 0.5),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.person_add_alt_1_rounded,
+                  color: scheme.onPrimary, size: 22),
+              const SizedBox(width: 10),
+              Text(
+                'New entry',
+                style: TextStyle(
+                  color: scheme.onPrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                  letterSpacing: 0.2,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -252,7 +415,6 @@ class _VisitorTile extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 14),
-            // ---- Meta chips -------------------------------------------------
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -406,12 +568,16 @@ class _StatusChip extends StatelessWidget {
 }
 
 class _EmptyView extends StatelessWidget {
-  const _EmptyView({required this.onlyInside});
+  const _EmptyView({required this.onlyInside, required this.isToday});
   final bool onlyInside;
+  final bool isToday;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final title = !isToday
+        ? 'No entries on this date'
+        : (onlyInside ? 'No visitors inside right now' : 'No entries yet');
     return ListView(
       children: [
         const SizedBox(height: 100),
@@ -429,15 +595,14 @@ class _EmptyView extends StatelessWidget {
         ),
         const SizedBox(height: 20),
         Center(
-          child: Text(
-            onlyInside ? 'No visitors inside right now' : 'No entries yet',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          child: Text(title, style: Theme.of(context).textTheme.titleMedium),
         ),
         const SizedBox(height: 6),
         Center(
           child: Text(
-            'Tap “New entry” to add a visitor',
+            isToday
+                ? 'Tap “New entry” to add a visitor'
+                : 'Switch to today to add a visitor',
             style: Theme.of(context)
                 .textTheme
                 .bodyMedium
