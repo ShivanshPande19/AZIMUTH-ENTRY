@@ -6,9 +6,12 @@ import '../../services/visitor_service.dart';
 import '../../theme.dart';
 import '../../utils/format.dart';
 
-/// Owner's view of the full register. Phone numbers stay masked until the owner
-/// explicitly taps "Reveal", which fetches the real number and records an audit
-/// entry on the server.
+/// Owner's view of the full register, presented as a light dashboard:
+/// a summary strip at the top, then visitors grouped by the day they arrived
+/// (Today / Yesterday / dated sections) so it's easy to see who came when.
+///
+/// Phone numbers stay masked until the owner taps "Reveal", which fetches the
+/// real number and records an audit entry on the server.
 class OwnerVisitorsScreen extends StatefulWidget {
   const OwnerVisitorsScreen({super.key});
 
@@ -153,6 +156,44 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
         .toList();
   }
 
+  /// Flatten the visitor list into a stats header + per-day sections.
+  List<_Row> _buildRows(List<Visitor> list) {
+    final now = DateTime.now();
+    final rows = <_Row>[];
+
+    final todayCount = list.where((v) => isSameDay(v.entryTime, now)).length;
+    final insideCount = list.where((v) => v.isInside).length;
+    rows.add(_StatsRow(
+      today: todayCount,
+      inside: insideCount,
+      total: list.length,
+    ));
+
+    // Count per day for the header badges.
+    final counts = <DateTime, int>{};
+    for (final v in list) {
+      final d =
+          DateTime(v.entryTime.year, v.entryTime.month, v.entryTime.day);
+      counts[d] = (counts[d] ?? 0) + 1;
+    }
+
+    DateTime? current;
+    for (final v in list) {
+      final d =
+          DateTime(v.entryTime.year, v.entryTime.month, v.entryTime.day);
+      if (current == null || !isSameDay(current, d)) {
+        current = d;
+        rows.add(_HeaderRow(
+          label: relativeDayLabel(d, now: now),
+          count: counts[d]!,
+          isToday: isSameDay(d, now),
+        ));
+      }
+      rows.add(_VisitorRow(v));
+    }
+    return rows;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -194,18 +235,220 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
                 if (list.isEmpty) {
                   return _EmptyView(searching: _query.trim().isNotEmpty);
                 }
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                  itemCount: list.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (context, i) =>
-                      _OwnerVisitorTile(visitor: list[i], onReveal: _reveal),
+                final rows = _buildRows(list);
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+                  itemCount: rows.length,
+                  itemBuilder: (context, i) {
+                    final row = rows[i];
+                    return switch (row) {
+                      _StatsRow() => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _StatsStrip(
+                            today: row.today,
+                            inside: row.inside,
+                            total: row.total,
+                          ),
+                        ),
+                      _HeaderRow() => _DayHeader(
+                          label: row.label,
+                          count: row.count,
+                          isToday: row.isToday,
+                        ),
+                      _VisitorRow() => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _OwnerVisitorTile(
+                              visitor: row.visitor, onReveal: _reveal),
+                        ),
+                    };
+                  },
                 );
               },
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+// ---- Row model for the flattened, grouped list ----------------------------
+sealed class _Row {
+  const _Row();
+}
+
+class _StatsRow extends _Row {
+  const _StatsRow(
+      {required this.today, required this.inside, required this.total});
+  final int today;
+  final int inside;
+  final int total;
+}
+
+class _HeaderRow extends _Row {
+  const _HeaderRow(
+      {required this.label, required this.count, required this.isToday});
+  final String label;
+  final int count;
+  final bool isToday;
+}
+
+class _VisitorRow extends _Row {
+  const _VisitorRow(this.visitor);
+  final Visitor visitor;
+}
+
+// ---- Summary strip ---------------------------------------------------------
+class _StatsStrip extends StatelessWidget {
+  const _StatsStrip(
+      {required this.today, required this.inside, required this.total});
+  final int today;
+  final int inside;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Expanded(
+          child: _StatCard(
+            icon: Icons.today_rounded,
+            label: 'Today',
+            value: '$today',
+            color: scheme.primary,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _StatCard(
+            icon: Icons.meeting_room_rounded,
+            label: 'Inside now',
+            value: '$inside',
+            color: const Color(0xFF10B981),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _StatCard(
+            icon: Icons.groups_rounded,
+            label: 'Total',
+            value: '$total',
+            color: scheme.tertiary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  const _StatCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: scheme.outlineVariant.withValues(alpha: 0.7)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 18, color: color),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            style: Theme.of(context)
+                .textTheme
+                .headlineSmall
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---- Day section header ----------------------------------------------------
+class _DayHeader extends StatelessWidget {
+  const _DayHeader(
+      {required this.label, required this.count, required this.isToday});
+  final String label;
+  final int count;
+  final bool isToday;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final accent = isToday ? scheme.primary : scheme.onSurfaceVariant;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 18, 2, 10),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: isToday ? scheme.primary : scheme.onSurface,
+                ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              '$count',
+              style: TextStyle(
+                  color: accent, fontWeight: FontWeight.w700, fontSize: 12),
+            ),
+          ),
+          const Spacer(),
+          Expanded(
+            child: Divider(
+                indent: 8,
+                color: scheme.outlineVariant.withValues(alpha: 0.6)),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -221,7 +464,8 @@ class _OwnerVisitorTile extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final hasPhone = visitor.phoneMasked.isNotEmpty;
     final inside = visitor.isInside;
-    final statusColor = inside ? const Color(0xFF10B981) : scheme.onSurfaceVariant;
+    final statusColor =
+        inside ? const Color(0xFF10B981) : scheme.onSurfaceVariant;
 
     return Card(
       child: Padding(
@@ -281,19 +525,20 @@ class _OwnerVisitorTile extends StatelessWidget {
               children: [
                 Icon(Icons.login_rounded, size: 15, color: scheme.primary),
                 const SizedBox(width: 6),
-                Text(formatTime(visitor.entryTime),
+                Text(formatClock(visitor.entryTime),
                     style: Theme.of(context).textTheme.bodySmall),
                 const SizedBox(width: 16),
                 Icon(Icons.logout_rounded, size: 15, color: scheme.error),
                 const SizedBox(width: 6),
-                Text(formatTime(visitor.exitTime),
+                Text(formatClock(visitor.exitTime),
                     style: Theme.of(context).textTheme.bodySmall),
               ],
             ),
             const Divider(height: 24),
             Row(
               children: [
-                Icon(Icons.phone_outlined, size: 18, color: scheme.onSurfaceVariant),
+                Icon(Icons.phone_outlined,
+                    size: 18, color: scheme.onSurfaceVariant),
                 const SizedBox(width: 8),
                 Text(
                   hasPhone ? visitor.phoneMasked : 'No number',
@@ -307,8 +552,7 @@ class _OwnerVisitorTile extends StatelessWidget {
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
                       minimumSize: const Size(0, 42),
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 18),
+                      padding: const EdgeInsets.symmetric(horizontal: 18),
                     ),
                     onPressed: () => onReveal(visitor),
                     icon: const Icon(Icons.visibility_rounded, size: 18),
@@ -385,7 +629,9 @@ class _ErrorView extends StatelessWidget {
     return ListView(
       children: [
         const SizedBox(height: 120),
-        Center(child: Icon(Icons.error_outline_rounded, size: 56, color: scheme.error)),
+        Center(
+            child: Icon(Icons.error_outline_rounded,
+                size: 56, color: scheme.error)),
         const SizedBox(height: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -393,7 +639,8 @@ class _ErrorView extends StatelessWidget {
         ),
         const SizedBox(height: 20),
         Center(
-          child: FilledButton.tonal(onPressed: onRetry, child: const Text('Retry')),
+          child: FilledButton.tonal(
+              onPressed: onRetry, child: const Text('Retry')),
         ),
       ],
     );
