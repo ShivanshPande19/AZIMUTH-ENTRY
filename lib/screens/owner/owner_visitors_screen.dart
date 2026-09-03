@@ -32,7 +32,7 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
 
   final List<Visitor> _items = [];
   String _query = '';
-  DateTime? _filterDate; // null = show all dates
+  DateTime? _filterDate = DateTime.now(); // defaults to today; null = all dates
 
   bool _initialLoading = true;
   bool _loadingMore = false;
