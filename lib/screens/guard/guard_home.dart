@@ -81,11 +81,7 @@ class _GuardHomeState extends State<GuardHome> {
           const SizedBox(width: 4),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _addVisitor,
-        icon: const Icon(Icons.person_add_alt_1_rounded),
-        label: const Text('New entry'),
-      ),
+      floatingActionButton: _NewEntryFab(onTap: _addVisitor),
       body: Column(
         children: [
           Padding(
@@ -144,6 +140,56 @@ class _GuardHomeState extends State<GuardHome> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Modern gradient "New entry" action button — icon + short label, soft shadow
+/// and an ink splash, sitting above the content.
+class _NewEntryFab extends StatelessWidget {
+  const _NewEntryFab({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: AppTheme.brandGradient(Theme.of(context).brightness),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.seed.withValues(alpha: 0.45),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.person_add_alt_1_rounded, color: Colors.white),
+                SizedBox(width: 10),
+                Text(
+                  'New entry',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
