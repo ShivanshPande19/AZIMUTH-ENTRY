@@ -687,7 +687,7 @@ class _OwnerVisitorTile extends StatelessWidget {
     final hasPhone = visitor.phoneMasked.isNotEmpty;
     final inside = visitor.isInside;
     final statusColor =
-        inside ? const Color(0xFF10B981) : scheme.onSurfaceVariant;
+        inside ? AppTheme.success : scheme.onSurfaceVariant;
 
     return Card(
       child: Padding(
