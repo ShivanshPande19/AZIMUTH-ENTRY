@@ -33,7 +33,9 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
   int _page = 0;
   int _total = 0;
   String _query = '';
-  DateTime? _filterDate = DateTime.now(); // defaults to today; null = all dates
+  DateTime _filterDate = DateTime.now(); // the day being viewed (default: today)
+
+  bool get _isToday => isSameDay(_filterDate, DateTime.now());
 
   bool _loading = true;
   Object? _error;
@@ -115,7 +117,7 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: _filterDate ?? now,
+      initialDate: _filterDate,
       firstDate: DateTime(now.year - 3),
       lastDate: now,
       helpText: 'Show visitors on',
@@ -129,9 +131,10 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
     }
   }
 
-  void _clearFilterDate() {
+  void _goToday() {
+    if (_isToday) return;
     setState(() {
-      _filterDate = null;
+      _filterDate = DateTime.now();
       _page = 0;
     });
     _load();
@@ -291,8 +294,9 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
         ),
         _DateFilterBar(
           date: _filterDate,
+          isToday: _isToday,
           onPick: _pickFilterDate,
-          onClear: _clearFilterDate,
+          onToday: _goToday,
         ),
         Expanded(child: _buildBody()),
         if (!_loading && _error == null && _total > 0) _buildPaginationBar(),
@@ -310,7 +314,7 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
     if (_items.isEmpty) {
       return _EmptyView(
         searching: _query.trim().isNotEmpty,
-        dateFiltered: _filterDate != null,
+        isToday: _isToday,
       );
     }
     final rows = _buildRows(_items);
@@ -405,97 +409,121 @@ class _VisitorRow extends _Row {
   final Visitor visitor;
 }
 
-// ---- Date selector (styled to match the guard's working-date bar) ----------
+// ---- Date selector (matches the guard's working-date bar) ------------------
 class _DateFilterBar extends StatelessWidget {
-  const _DateFilterBar(
-      {required this.date, required this.onPick, required this.onClear});
-  final DateTime? date;
+  const _DateFilterBar({
+    required this.date,
+    required this.isToday,
+    required this.onPick,
+    required this.onToday,
+  });
+  final DateTime date;
+  final bool isToday;
   final VoidCallback onPick;
-  final VoidCallback onClear;
+  final VoidCallback onToday;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final active = date != null;
+    final accent = isToday ? scheme.onSurfaceVariant : scheme.primary;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: Material(
-              color: active
-                  ? scheme.primary.withValues(alpha: 0.10)
-                  : scheme.surfaceContainerHighest.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(14),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(14),
-                onTap: onPick,
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: (active
-                                  ? scheme.primary
-                                  : scheme.onSurfaceVariant)
-                              .withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(Icons.calendar_month_rounded,
-                            size: 20,
-                            color: active
-                                ? scheme.primary
-                                : scheme.onSurfaceVariant),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Showing',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelSmall
-                                  ?.copyWith(color: scheme.onSurfaceVariant),
+          Row(
+            children: [
+              Expanded(
+                child: Material(
+                  color: isToday
+                      ? scheme.surfaceContainerHighest.withValues(alpha: 0.5)
+                      : scheme.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(14),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: onPick,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: accent.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            Text(
-                              active ? relativeDayLabel(date!) : 'All dates',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    color: active
-                                        ? scheme.primary
-                                        : scheme.onSurface,
-                                  ),
+                            child: Icon(Icons.calendar_month_rounded,
+                                size: 20, color: accent),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  isToday ? 'Today' : 'Selected date',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(
+                                          color: scheme.onSurfaceVariant),
+                                ),
+                                Text(
+                                  relativeDayLabel(date),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        color: isToday
+                                            ? scheme.onSurface
+                                            : scheme.primary,
+                                      ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                          Icon(Icons.expand_more_rounded,
+                              color: scheme.onSurfaceVariant),
+                        ],
                       ),
-                      Icon(Icons.expand_more_rounded,
-                          color: scheme.onSurfaceVariant),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
+              if (!isToday) ...[
+                const SizedBox(width: 8),
+                FilledButton.tonalIcon(
+                  onPressed: onToday,
+                  icon: const Icon(Icons.today_rounded, size: 18),
+                  label: const Text('Today'),
+                ),
+              ],
+            ],
           ),
-          if (active) ...[
-            const SizedBox(width: 8),
-            FilledButton.tonalIcon(
-              onPressed: onClear,
-              icon: const Icon(Icons.event_available_rounded, size: 18),
-              label: const Text('All'),
+          if (!isToday)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded,
+                      size: 15, color: scheme.onSurfaceVariant),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Viewing a previous date. Tap Today to return.',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: scheme.onSurfaceVariant),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
         ],
       ),
     );
@@ -692,9 +720,9 @@ class _Avatar extends StatelessWidget {
 }
 
 class _EmptyView extends StatelessWidget {
-  const _EmptyView({required this.searching, this.dateFiltered = false});
+  const _EmptyView({required this.searching, required this.isToday});
   final bool searching;
-  final bool dateFiltered;
+  final bool isToday;
 
   @override
   Widget build(BuildContext context) {
@@ -704,12 +732,12 @@ class _EmptyView extends StatelessWidget {
     if (searching) {
       icon = Icons.search_off_rounded;
       message = 'No matching visitors';
-    } else if (dateFiltered) {
+    } else if (isToday) {
+      icon = Icons.people_outline_rounded;
+      message = 'No visitors yet today';
+    } else {
       icon = Icons.event_busy_rounded;
       message = 'No visitors on this date';
-    } else {
-      icon = Icons.people_outline_rounded;
-      message = 'No visitors yet';
     }
     return ListView(
       children: [
