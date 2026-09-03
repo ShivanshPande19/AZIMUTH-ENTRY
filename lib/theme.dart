@@ -8,9 +8,30 @@ import 'package:flutter/material.dart';
 class AppTheme {
   AppTheme._();
 
-  /// Brand seed colour — a rich, modern indigo (premium but not loud).
-  static const Color seed = Color(0xFF4F46E5);
-  static const Color accent = Color(0xFF0EA5E9);
+  // ---- Brand colour system --------------------------------------------------
+  /// Primary (dominant): deep navy — trust, authority, professionalism.
+  /// Used for headers, brand surfaces and section accents.
+  static const Color primaryNavy = Color(0xFF1E3A8A);
+
+  /// Secondary (action): bright royal blue — primary buttons, active states.
+  static const Color actionBlue = Color(0xFF2563EB);
+
+  /// Success (check-in / "Inside now").
+  static const Color success = Color(0xFF10B981);
+
+  /// Warning / alert (pending, flagged).
+  static const Color warning = Color(0xFFF59E0B);
+
+  /// Error / danger (blacklisted, unauthorized).
+  static const Color danger = Color(0xFFEF4444);
+
+  /// Light-mode background — soft slate-tinted off-white.
+  static const Color lightBg = Color(0xFFF8FAFC);
+  static const Color darkBg = Color(0xFF0F1115);
+
+  /// Kept for older references. `seed` drives the ColorScheme.
+  static const Color seed = primaryNavy;
+  static const Color accent = actionBlue;
 
   static const double radius = 18;
   static const double fieldRadius = 14;
@@ -21,10 +42,14 @@ class AppTheme {
   static ThemeData _build(Brightness brightness) {
     final isDark = brightness == Brightness.dark;
     final scheme = ColorScheme.fromSeed(
-      seedColor: seed,
+      seedColor: primaryNavy,
       brightness: brightness,
+      // Actions use the bright royal blue; navy stays for headers/accents.
+      primary: isDark ? null : actionBlue,
+      secondary: actionBlue,
+      error: danger,
     ).copyWith(
-      secondary: accent,
+      error: danger,
     );
 
     final baseText = ThemeData(brightness: brightness).textTheme;
@@ -32,8 +57,7 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
-      scaffoldBackgroundColor:
-          isDark ? const Color(0xFF0F1115) : const Color(0xFFF3F4FB),
+      scaffoldBackgroundColor: isDark ? darkBg : lightBg,
       splashFactory: InkSparkle.splashFactory,
 
       textTheme: baseText.copyWith(
@@ -51,8 +75,7 @@ class AppTheme {
       ),
 
       appBarTheme: AppBarTheme(
-        backgroundColor:
-            isDark ? const Color(0xFF0F1115) : const Color(0xFFF3F4FB),
+        backgroundColor: isDark ? darkBg : lightBg,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0.5,
@@ -72,7 +95,7 @@ class AppTheme {
         margin: EdgeInsets.zero,
         color: scheme.surface,
         surfaceTintColor: Colors.transparent,
-        shadowColor: seed.withValues(alpha: 0.14),
+        shadowColor: primaryNavy.withValues(alpha: 0.16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radius),
           side: BorderSide(
@@ -182,12 +205,12 @@ class AppTheme {
     );
   }
 
-  /// A restrained, single-hue brand gradient for hero / header areas.
+  /// Brand gradient for hero / header areas: deep navy into royal blue.
   static LinearGradient brandGradient(Brightness brightness) {
     return const LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFF4F46E5), Color(0xFF4338CA)],
+      colors: [primaryNavy, actionBlue],
     );
   }
 }
@@ -195,12 +218,12 @@ class AppTheme {
 /// Deterministic soft avatar colour from a name/string.
 Color avatarColor(String seedStr, ColorScheme scheme) {
   const palette = [
-    Color(0xFF2563EB), // blue
+    Color(0xFF1E3A8A), // navy
+    Color(0xFF2563EB), // royal blue
     Color(0xFF0EA5E9), // sky
     Color(0xFF0D9488), // teal
-    Color(0xFF4F46E5), // indigo
+    Color(0xFF10B981), // emerald
     Color(0xFF64748B), // slate
-    Color(0xFF7C3AED), // violet
   ];
   if (seedStr.isEmpty) return scheme.primary;
   final idx = seedStr.codeUnits.fold<int>(0, (a, b) => a + b) % palette.length;
