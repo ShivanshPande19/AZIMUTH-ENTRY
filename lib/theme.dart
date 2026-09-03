@@ -113,7 +113,11 @@ class AppTheme {
 
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(54),
+          // Min HEIGHT of 52 for a comfortable tap target, but a finite min
+          // width (0). Using Size.fromHeight here forces an infinite min width,
+          // which crashes when a FilledButton sits inside a Row. Full-width
+          // primary buttons still stretch via their parent Column.
+          minimumSize: const Size(0, 52),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(fieldRadius),
           ),
