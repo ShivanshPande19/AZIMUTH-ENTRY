@@ -39,28 +39,3 @@ class Visitor {
     );
   }
 }
-
-/// One row of the phone-reveal audit log (owner-only).
-class AuditEntry {
-  final String id;
-  final String visitorId;
-  final String? visitorName;
-  final DateTime viewedAt;
-
-  const AuditEntry({
-    required this.id,
-    required this.visitorId,
-    required this.viewedAt,
-    this.visitorName,
-  });
-
-  factory AuditEntry.fromMap(Map<String, dynamic> map) {
-    final visitor = map['visitors'] as Map<String, dynamic>?;
-    return AuditEntry(
-      id: map['id'] as String,
-      visitorId: map['visitor_id'] as String,
-      visitorName: visitor?['name'] as String?,
-      viewedAt: DateTime.parse(map['viewed_at'] as String).toLocal(),
-    );
-  }
-}
