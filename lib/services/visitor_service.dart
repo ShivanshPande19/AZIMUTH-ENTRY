@@ -31,10 +31,13 @@ class VisitorService {
   /// List visitors, newest first. Contains only masked phone numbers.
   ///
   /// [day] optionally restricts results to entries whose entry_time falls on
-  /// that calendar day (local time).
+  /// that calendar day (local time). [limit]/[offset] enable server-side
+  /// pagination so large registers are fetched a page at a time.
   Future<List<Visitor>> listVisitors({
     bool onlyInside = false,
     DateTime? day,
+    int? limit,
+    int? offset,
   }) async {
     var query = _client.from('visitors').select();
     if (onlyInside) {
@@ -47,7 +50,12 @@ class VisitorService {
           .gte('entry_time', start.toUtc().toIso8601String())
           .lt('entry_time', end.toUtc().toIso8601String());
     }
-    final rows = await query.order('entry_time', ascending: false);
+    var transform = query.order('entry_time', ascending: false);
+    if (limit != null) {
+      final from = offset ?? 0;
+      transform = transform.range(from, from + limit - 1);
+    }
+    final rows = await transform;
     return (rows as List)
         .map((r) => Visitor.fromMap(r as Map<String, dynamic>))
         .toList();

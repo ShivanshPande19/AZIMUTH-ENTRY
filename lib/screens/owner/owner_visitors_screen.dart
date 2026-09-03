@@ -7,8 +7,12 @@ import '../../theme.dart';
 import '../../utils/format.dart';
 
 /// Owner's view of the full register, presented as a light dashboard:
-/// a summary strip at the top, then visitors grouped by the day they arrived
-/// (Today / Yesterday / dated sections) so it's easy to see who came when.
+/// a summary strip, a working-date selector, then visitors grouped by the day
+/// they arrived (Today / Yesterday / dated sections).
+///
+/// The register is loaded a page at a time (infinite scroll) so it scales to
+/// large numbers of visitors without fetching everything up front, and the
+/// list renders lazily.
 ///
 /// Phone numbers stay masked until the owner taps "Reveal", which fetches the
 /// real number and records an audit entry on the server.
@@ -20,29 +24,101 @@ class OwnerVisitorsScreen extends StatefulWidget {
 }
 
 class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
+  static const int _pageSize = 30;
+
   final _service = VisitorService();
   final _searchCtrl = TextEditingController();
+  final _scroll = ScrollController();
 
-  late Future<List<Visitor>> _future;
+  final List<Visitor> _items = [];
   String _query = '';
   DateTime? _filterDate; // null = show all dates
+
+  bool _initialLoading = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
+  Object? _error;
 
   @override
   void initState() {
     super.initState();
+    _scroll.addListener(_onScroll);
     _reload();
   }
 
   @override
   void dispose() {
+    _scroll.removeListener(_onScroll);
+    _scroll.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
 
-  void _reload() {
+  void _onScroll() {
+    if (_scroll.position.pixels >=
+        _scroll.position.maxScrollExtent - 320) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _reload() async {
     setState(() {
-      _future = _service.listVisitors();
+      _initialLoading = true;
+      _error = null;
+      _items.clear();
+      _hasMore = true;
     });
+    await _loadPage(reset: true);
+  }
+
+  Future<void> _loadPage({bool reset = false}) async {
+    try {
+      final page = await _service.listVisitors(
+        day: _filterDate,
+        limit: _pageSize,
+        offset: reset ? 0 : _items.length,
+      );
+      if (!mounted) return;
+      setState(() {
+        _items.addAll(page);
+        _hasMore = page.length == _pageSize;
+        _initialLoading = false;
+        _loadingMore = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e;
+        _initialLoading = false;
+        _loadingMore = false;
+      });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore || _initialLoading) return;
+    setState(() => _loadingMore = true);
+    await _loadPage();
+  }
+
+  Future<void> _pickFilterDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _filterDate ?? now,
+      firstDate: DateTime(now.year - 3),
+      lastDate: now,
+      helpText: 'Show visitors on',
+    );
+    if (picked != null && mounted) {
+      setState(() => _filterDate = picked);
+      _reload();
+    }
+  }
+
+  void _clearFilterDate() {
+    setState(() => _filterDate = null);
+    _reload();
   }
 
   Future<void> _reveal(Visitor v) async {
@@ -147,40 +223,18 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
     );
   }
 
-  List<Visitor> _applyFilters(List<Visitor> all) {
-    var result = all;
-    if (_filterDate != null) {
-      result =
-          result.where((v) => isSameDay(v.entryTime, _filterDate!)).toList();
-    }
+  /// Client-side search over the loaded items (date filtering is server-side).
+  List<Visitor> _search(List<Visitor> all) {
     final q = _query.trim().toLowerCase();
-    if (q.isNotEmpty) {
-      result = result
-          .where((v) =>
-              v.name.toLowerCase().contains(q) ||
-              (v.company ?? '').toLowerCase().contains(q))
-          .toList();
-    }
-    return result;
+    if (q.isEmpty) return all;
+    return all
+        .where((v) =>
+            v.name.toLowerCase().contains(q) ||
+            (v.company ?? '').toLowerCase().contains(q))
+        .toList();
   }
 
-  Future<void> _pickFilterDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _filterDate ?? now,
-      firstDate: DateTime(now.year - 3),
-      lastDate: now,
-      helpText: 'Show visitors on',
-    );
-    if (picked != null && mounted) {
-      setState(() => _filterDate = picked);
-    }
-  }
-
-  void _clearFilterDate() => setState(() => _filterDate = null);
-
-  /// Flatten the visitor list into a stats header + per-day sections.
+  /// Flatten into an optional stats row + per-day sections + a trailing loader.
   List<_Row> _buildRows(List<Visitor> list, {required bool showStats}) {
     final now = DateTime.now();
     final rows = <_Row>[];
@@ -195,7 +249,6 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
       ));
     }
 
-    // Count per day for the header badges.
     final counts = <DateTime, int>{};
     for (final v in list) {
       final d =
@@ -217,6 +270,8 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
       }
       rows.add(_VisitorRow(v));
     }
+
+    if (_hasMore) rows.add(const _LoaderRow());
     return rows;
   }
 
@@ -249,59 +304,68 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
           onPick: _pickFilterDate,
           onClear: _clearFilterDate,
         ),
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: () async => _reload(),
-            child: FutureBuilder<List<Visitor>>(
-              future: _future,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return _ErrorView(
-                      message: '${snapshot.error}', onRetry: _reload);
-                }
-                final list = _applyFilters(snapshot.data ?? []);
-                if (list.isEmpty) {
-                  return _EmptyView(
-                    searching: _query.trim().isNotEmpty,
-                    dateFiltered: _filterDate != null,
-                  );
-                }
-                final rows = _buildRows(list, showStats: _filterDate == null);
-                return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
-                  itemCount: rows.length,
-                  itemBuilder: (context, i) {
-                    final row = rows[i];
-                    return switch (row) {
-                      _StatsRow() => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _StatsStrip(
-                            today: row.today,
-                            inside: row.inside,
-                            total: row.total,
-                          ),
+        Expanded(child: _buildBody()),
+      ],
+    );
+  }
+
+  Widget _buildBody() {
+    if (_initialLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null && _items.isEmpty) {
+      return _ErrorView(message: '$_error', onRetry: _reload);
+    }
+
+    final list = _search(_items);
+    final showStats = _filterDate == null && _query.trim().isEmpty;
+    final rows = _buildRows(list, showStats: showStats);
+
+    return RefreshIndicator(
+      onRefresh: _reload,
+      child: list.isEmpty
+          ? _EmptyView(
+              searching: _query.trim().isNotEmpty,
+              dateFiltered: _filterDate != null,
+            )
+          : ListView.builder(
+              controller: _scroll,
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+              itemCount: rows.length,
+              itemBuilder: (context, i) {
+                final row = rows[i];
+                return switch (row) {
+                  _StatsRow() => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _StatsStrip(
+                        today: row.today,
+                        inside: row.inside,
+                        total: row.total,
+                      ),
+                    ),
+                  _HeaderRow() => _DayHeader(
+                      label: row.label,
+                      count: row.count,
+                      isToday: row.isToday,
+                    ),
+                  _VisitorRow() => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _OwnerVisitorTile(
+                          visitor: row.visitor, onReveal: _reveal),
+                    ),
+                  _LoaderRow() => const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(
+                        child: SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2.4),
                         ),
-                      _HeaderRow() => _DayHeader(
-                          label: row.label,
-                          count: row.count,
-                          isToday: row.isToday,
-                        ),
-                      _VisitorRow() => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _OwnerVisitorTile(
-                              visitor: row.visitor, onReveal: _reveal),
-                        ),
-                    };
-                  },
-                );
+                      ),
+                    ),
+                };
               },
             ),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -332,7 +396,11 @@ class _VisitorRow extends _Row {
   final Visitor visitor;
 }
 
-// ---- Date filter bar -------------------------------------------------------
+class _LoaderRow extends _Row {
+  const _LoaderRow();
+}
+
+// ---- Date selector (styled to match the guard's working-date bar) ----------
 class _DateFilterBar extends StatelessWidget {
   const _DateFilterBar(
       {required this.date, required this.onPick, required this.onClear});
@@ -358,30 +426,53 @@ class _DateFilterBar extends StatelessWidget {
                 borderRadius: BorderRadius.circular(14),
                 onTap: onPick,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   child: Row(
                     children: [
-                      Icon(Icons.calendar_month_rounded,
-                          size: 20,
-                          color: active
-                              ? scheme.primary
-                              : scheme.onSurfaceVariant),
-                      const SizedBox(width: 10),
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: (active
+                                  ? scheme.primary
+                                  : scheme.onSurfaceVariant)
+                              .withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(Icons.calendar_month_rounded,
+                            size: 20,
+                            color: active
+                                ? scheme.primary
+                                : scheme.onSurfaceVariant),
+                      ),
+                      const SizedBox(width: 12),
                       Expanded(
-                        child: Text(
-                          active ? relativeDayLabel(date!) : 'All dates',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleSmall
-                              ?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: active
-                                    ? scheme.primary
-                                    : scheme.onSurface,
-                              ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Showing',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelSmall
+                                  ?.copyWith(color: scheme.onSurfaceVariant),
+                            ),
+                            Text(
+                              active ? relativeDayLabel(date!) : 'All dates',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: active
+                                        ? scheme.primary
+                                        : scheme.onSurface,
+                                  ),
+                            ),
+                          ],
                         ),
                       ),
                       Icon(Icons.expand_more_rounded,
@@ -394,10 +485,10 @@ class _DateFilterBar extends StatelessWidget {
           ),
           if (active) ...[
             const SizedBox(width: 8),
-            IconButton.filledTonal(
-              tooltip: 'Show all dates',
+            FilledButton.tonalIcon(
               onPressed: onClear,
-              icon: const Icon(Icons.close_rounded),
+              icon: const Icon(Icons.event_available_rounded, size: 18),
+              label: const Text('All'),
             ),
           ],
         ],
@@ -470,8 +561,8 @@ class _StatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: scheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-            color: scheme.outlineVariant.withValues(alpha: 0.7)),
+        border:
+            Border.all(color: scheme.outlineVariant.withValues(alpha: 0.7)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -549,10 +640,9 @@ class _DayHeader extends StatelessWidget {
                   color: accent, fontWeight: FontWeight.w700, fontSize: 12),
             ),
           ),
-          const Spacer(),
+          const SizedBox(width: 12),
           Expanded(
             child: Divider(
-                indent: 8,
                 color: scheme.outlineVariant.withValues(alpha: 0.6)),
           ),
         ],
@@ -720,15 +810,11 @@ class _EmptyView extends StatelessWidget {
     return ListView(
       children: [
         const SizedBox(height: 120),
-        Center(
-          child: Icon(icon, size: 64, color: scheme.onSurfaceVariant),
-        ),
+        Center(child: Icon(icon, size: 64, color: scheme.onSurfaceVariant)),
         const SizedBox(height: 12),
         Center(
-          child: Text(
-            message,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          child: Text(message,
+              style: Theme.of(context).textTheme.titleMedium),
         ),
       ],
     );
