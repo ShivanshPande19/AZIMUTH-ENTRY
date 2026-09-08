@@ -48,6 +48,10 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
 
+  # Branding: generate the app launcher icon and native splash from the logo.
+  flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.4
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
@@ -89,3 +93,31 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+
+# =============================================================================
+# Branding — app icon & splash screen (AZIMUTH logo)
+# =============================================================================
+# The logo is white-on-black, so both use a black background.
+#
+# One-time generation (after placing the logo file, see assets/branding/README):
+#   flutter pub get
+#   dart run flutter_native_splash:create
+#   dart run flutter_launcher_icons
+# =============================================================================
+
+flutter_launcher_icons:
+  image_path: "assets/branding/azimuth_logo.png"
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  background_color_ios: "#000000"
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: "assets/branding/azimuth_logo.png"
+
+flutter_native_splash:
+  color: "#000000"
+  image: assets/branding/azimuth_logo.png
+  android_12:
+    color: "#000000"
+    image: assets/branding/azimuth_logo.png
