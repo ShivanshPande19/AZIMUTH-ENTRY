@@ -98,7 +98,7 @@ flutter:
 # =============================================================================
 # Branding — app icon & splash screen (AZIMUTH logo)
 # =============================================================================
-# The logo is white-on-black, so both use a black background.
+# The logo is black-on-white, so both use a white background.
 #
 # One-time generation (after placing the logo file, see assets/branding/README):
 #   flutter pub get
@@ -111,13 +111,13 @@ flutter_launcher_icons:
   android: true
   ios: true
   remove_alpha_ios: true
-  background_color_ios: "#000000"
-  adaptive_icon_background: "#000000"
+  background_color_ios: "#FFFFFF"
+  adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "assets/branding/azimuth_logo.png"
 
 flutter_native_splash:
-  color: "#000000"
+  color: "#FFFFFF"
   image: assets/branding/azimuth_logo.png
   android_12:
-    color: "#000000"
+    color: "#FFFFFF"
     image: assets/branding/azimuth_logo.png
