@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required so release builds can reach the network (Supabase). Flutter
+         only adds this to the debug/profile manifests by default, so release
+         APKs fail DNS/network without it. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="Gate Entry"
         android:name="${applicationName}"
