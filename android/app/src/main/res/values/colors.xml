@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Background for the adaptive launcher icon. The logo is black-on-white,
+         so the icon background stays white. -->
+    <color name="ic_launcher_background">#FFFFFF</color>
+</resources>
