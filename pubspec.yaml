@@ -107,13 +107,16 @@ flutter:
 # =============================================================================
 
 flutter_launcher_icons:
-  image_path: "assets/branding/azimuth_logo.png"
+  # App icon uses the compact "truck cab" mark (cropped from the wide logo)
+  # centred with padding, so it is not cramped inside the launcher mask.
+  # Regenerate the padded sources with: python3 tool_make_icon_sources.py
+  image_path: "assets/branding/app_icon.png"
   android: true
   ios: true
   remove_alpha_ios: true
   background_color_ios: "#FFFFFF"
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/branding/azimuth_logo.png"
+  adaptive_icon_foreground: "assets/branding/app_icon_foreground.png"
 
 flutter_native_splash:
   color: "#FFFFFF"
