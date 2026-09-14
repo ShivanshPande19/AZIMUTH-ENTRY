@@ -17,17 +17,31 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
-  final _purposeCtrl = TextEditingController();
+  final _otherPurposeCtrl = TextEditingController();
   final _service = VisitorService();
 
+  /// Selectable purposes shown in the dropdown. Keep "Others" last so the
+  /// custom text field naturally appears at the bottom when chosen.
+  static const List<String> _purposeOptions = <String>[
+    'Official',
+    'Meeting',
+    'Query / Enquiry',
+    'Interview',
+    'Personal',
+    'Others',
+  ];
+
+  String? _selectedPurpose;
   bool _saving = false;
+
+  bool get _isOther => _selectedPurpose == 'Others';
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _addressCtrl.dispose();
-    _purposeCtrl.dispose();
+    _otherPurposeCtrl.dispose();
     super.dispose();
   }
 
@@ -35,11 +49,14 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
+      // For "Others" use the typed-in text; otherwise use the chosen option.
+      final purpose =
+          _isOther ? _otherPurposeCtrl.text.trim() : (_selectedPurpose ?? '');
       await _service.addVisitor(
         name: _nameCtrl.text,
         phone: _phoneCtrl.text,
         company: _addressCtrl.text,
-        purpose: _purposeCtrl.text,
+        purpose: purpose,
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -147,38 +164,79 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _purposeCtrl,
-                          textCapitalization: TextCapitalization.sentences,
-                          textInputAction: TextInputAction.next,
+                        DropdownButtonFormField<String>(
+                          initialValue: _selectedPurpose,
+                          isExpanded: true,
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.radius),
                           decoration: const InputDecoration(
                             labelText: 'Purpose of visit (optional)',
                             prefixIcon: Icon(Icons.notes_outlined),
                           ),
+                          items: [
+                            for (final option in _purposeOptions)
+                              DropdownMenuItem<String>(
+                                value: option,
+                                child: Text(option),
+                              ),
+                          ],
+                          onChanged: _saving
+                              ? null
+                              : (value) =>
+                                  setState(() => _selectedPurpose = value),
+                        ),
+                        // ---- Free-text reason, only when "Others" is picked --
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 180),
+                          curve: Curves.easeOut,
+                          child: _isOther
+                              ? Padding(
+                                  padding: const EdgeInsets.only(top: 16),
+                                  child: TextFormField(
+                                    controller: _otherPurposeCtrl,
+                                    textCapitalization:
+                                        TextCapitalization.sentences,
+                                    textInputAction: TextInputAction.next,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Please specify the purpose',
+                                      prefixIcon:
+                                          Icon(Icons.edit_note_outlined),
+                                    ),
+                                    validator: (v) {
+                                      if (!_isOther) return null;
+                                      return (v == null || v.trim().isEmpty)
+                                          ? 'Please describe the purpose'
+                                          : null;
+                                    },
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
                         ),
                         const SizedBox(height: 16),
                         TextFormField(
                           controller: _phoneCtrl,
                           obscureText: true,
                           obscuringCharacter: '•',
-                          keyboardType: TextInputType.phone,
+                          keyboardType: TextInputType.number,
                           enableSuggestions: false,
                           autocorrect: false,
                           inputFormatters: [
-                            FilteringTextInputFormatter.allow(
-                                RegExp(r'[0-9+ ]')),
-                            LengthLimitingTextInputFormatter(15),
+                            // Digits only — no '+', spaces or symbols.
+                            FilteringTextInputFormatter.digitsOnly,
+                            // Never allow more than 10 digits.
+                            LengthLimitingTextInputFormatter(10),
                           ],
                           decoration: const InputDecoration(
                             labelText: 'Phone number',
+                            hintText: '10-digit mobile number',
                             prefixIcon: Icon(Icons.phone_outlined),
                           ),
                           validator: (v) {
                             final digits =
                                 (v ?? '').replaceAll(RegExp(r'\D'), '');
                             if (digits.isEmpty) return null; // optional
-                            if (digits.length < 7) {
-                              return 'Number looks too short';
+                            if (digits.length != 10) {
+                              return 'Enter a valid 10-digit number';
                             }
                             return null;
                           },
