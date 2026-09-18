@@ -771,6 +771,26 @@ class _OwnerVisitorTile extends StatelessWidget {
                     style: Theme.of(context).textTheme.bodySmall),
               ],
             ),
+            const SizedBox(height: 8),
+            // Duration: live "inside for" while present, else total stay.
+            Row(
+              children: [
+                Icon(Icons.schedule_rounded,
+                    size: 15,
+                    color: inside ? AppTheme.success : scheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Text(
+                  inside
+                      ? 'Inside for ${formatDuration(visitor.entryTime, null)}'
+                      : 'Stayed ${formatDuration(visitor.entryTime, visitor.exitTime)}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color:
+                            inside ? AppTheme.success : scheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
             const Divider(height: 24),
             Row(
               children: [
