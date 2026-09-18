@@ -23,7 +23,7 @@ class OwnerVisitorsScreen extends StatefulWidget {
 }
 
 class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
-  static const int _pageSize = 25;
+  static const int _pageSize = 10;
 
   final _service = VisitorService();
   final _searchCtrl = TextEditingController();
