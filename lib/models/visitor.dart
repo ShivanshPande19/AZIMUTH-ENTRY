@@ -13,6 +13,11 @@ class Visitor {
   final DateTime entryTime;
   final DateTime? exitTime;
 
+  /// Storage object key of the visitor's photo inside the `visitor-photos`
+  /// bucket (e.g. `a1b2c3.jpg`). Null when no photo was captured. The public
+  /// URL is built on demand — see [VisitorService.photoUrl].
+  final String? photoPath;
+
   const Visitor({
     required this.id,
     required this.name,
@@ -21,9 +26,11 @@ class Visitor {
     this.company,
     this.purpose,
     this.exitTime,
+    this.photoPath,
   });
 
   bool get isInside => exitTime == null;
+  bool get hasPhoto => (photoPath ?? '').isNotEmpty;
 
   factory Visitor.fromMap(Map<String, dynamic> map) {
     return Visitor(
@@ -32,6 +39,7 @@ class Visitor {
       company: map['company'] as String?,
       purpose: map['purpose'] as String?,
       phoneMasked: (map['phone_masked'] ?? '') as String,
+      photoPath: map['photo_path'] as String?,
       entryTime: DateTime.parse(map['entry_time'] as String).toLocal(),
       exitTime: map['exit_time'] == null
           ? null

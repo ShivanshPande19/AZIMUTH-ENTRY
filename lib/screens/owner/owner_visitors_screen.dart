@@ -7,6 +7,7 @@ import '../../models/visitor.dart';
 import '../../services/visitor_service.dart';
 import '../../theme.dart';
 import '../../utils/format.dart';
+import '../../widgets/visitor_avatar.dart';
 
 /// Owner's view of the register, paged like an email inbox: one page of results
 /// at a time with Previous / Next controls and a "Page N of M" indicator.
@@ -178,9 +179,7 @@ class _OwnerVisitorsScreenState extends State<OwnerVisitorsScreen> {
           children: [
             Row(
               children: [
-                _Avatar(
-                    color: avatarColor(v.name, scheme),
-                    text: initialsOf(v.name)),
+                VisitorAvatar(name: v.name, photoPath: v.photoPath),
                 const SizedBox(width: 12),
                 Expanded(
                   child:
@@ -715,9 +714,8 @@ class _OwnerVisitorTile extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _Avatar(
-                    color: avatarColor(visitor.name, scheme),
-                    text: initialsOf(visitor.name)),
+                VisitorAvatar(
+                    name: visitor.name, photoPath: visitor.photoPath),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -802,28 +800,6 @@ class _OwnerVisitorTile extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.color, required this.text});
-  final Color color;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 46,
-      height: 46,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Text(text,
-          style: TextStyle(
-              color: color, fontWeight: FontWeight.w700, fontSize: 16)),
     );
   }
 }
