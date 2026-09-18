@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../theme.dart';
 import '../../services/visitor_service.dart';
@@ -19,6 +20,7 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
   final _addressCtrl = TextEditingController();
   final _otherPurposeCtrl = TextEditingController();
   final _service = VisitorService();
+  final ImagePicker _picker = ImagePicker();
 
   /// Selectable purposes shown in the dropdown. Keep "Others" last so the
   /// custom text field naturally appears at the bottom when chosen.
@@ -26,12 +28,18 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
     'Official',
     'Meeting',
     'Query / Enquiry',
+    'Vendors',
     'Interview',
     'Personal',
     'Others',
   ];
 
   String? _selectedPurpose;
+
+  /// Captured photo bytes (already downscaled + compressed by the picker).
+  /// Kept in memory only until the entry is saved.
+  Uint8List? _photoBytes;
+
   bool _saving = false;
 
   bool get _isOther => _selectedPurpose == 'Others';
@@ -49,6 +57,11 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
+      // Upload the photo first (if any); the RPC only needs its object key.
+      String? photoPath;
+      if (_photoBytes != null) {
+        photoPath = await _service.uploadVisitorPhoto(_photoBytes!);
+      }
       // For "Others" use the typed-in text; otherwise use the chosen option.
       final purpose =
           _isOther ? _otherPurposeCtrl.text.trim() : (_selectedPurpose ?? '');
@@ -57,6 +70,7 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
         phone: _phoneCtrl.text,
         company: _addressCtrl.text,
         purpose: purpose,
+        photoPath: photoPath,
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -68,6 +82,166 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// Capture/select a photo. The picker downsizes to at most 720px and
+  /// compresses to ~55% JPEG *before* handing us the bytes, so the file stays
+  /// small (typically well under 100 KB) — light to upload and to render on
+  /// older devices.
+  Future<void> _pickPhoto(ImageSource source) async {
+    try {
+      final file = await _picker.pickImage(
+        source: source,
+        maxWidth: 720,
+        maxHeight: 720,
+        imageQuality: 55,
+      );
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      setState(() => _photoBytes = bytes);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not get photo: $e')),
+      );
+    }
+  }
+
+  void _choosePhotoSource() {
+    if (_saving) return;
+    final scheme = Theme.of(context).colorScheme;
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: scheme.primary.withValues(alpha: 0.12),
+                child: Icon(Icons.photo_camera_rounded, color: scheme.primary),
+              ),
+              title: const Text('Take photo'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickPhoto(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: scheme.primary.withValues(alpha: 0.12),
+                child: Icon(Icons.photo_library_rounded, color: scheme.primary),
+              ),
+              title: const Text('Choose from gallery'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickPhoto(ImageSource.gallery);
+              },
+            ),
+            if (_photoBytes != null)
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: scheme.error.withValues(alpha: 0.12),
+                  child: Icon(Icons.delete_outline_rounded, color: scheme.error),
+                ),
+                title: Text('Remove photo',
+                    style: TextStyle(color: scheme.error)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  setState(() => _photoBytes = null);
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// A tappable, circular photo well: shows the captured photo (with a small
+  /// edit badge) or a camera placeholder. Kept compact and simple so it stays
+  /// smooth on older devices.
+  Widget _buildPhotoPicker(ColorScheme scheme) {
+    const double d = 104;
+    final hasPhoto = _photoBytes != null;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: _choosePhotoSource,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: d,
+                height: d,
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: scheme.primary.withValues(alpha: hasPhoto ? 0 : 0.4),
+                    width: 1.5,
+                  ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: hasPhoto
+                    ? Image.memory(
+                        _photoBytes!,
+                        width: d,
+                        height: d,
+                        fit: BoxFit.cover,
+                        gaplessPlayback: true,
+                      )
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.add_a_photo_outlined,
+                              color: scheme.primary, size: 30),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Add photo',
+                            style: TextStyle(
+                              color: scheme.primary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+              if (hasPhoto)
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: scheme.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: scheme.surface, width: 2),
+                    ),
+                    child: Icon(Icons.edit_rounded,
+                        color: scheme.onPrimary, size: 15),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          hasPhoto ? 'Tap to change or remove' : 'Visitor photo (optional)',
+          style: Theme.of(context)
+              .textTheme
+              .bodySmall
+              ?.copyWith(color: scheme.onSurfaceVariant),
+        ),
+      ],
+    );
   }
 
   @override
@@ -141,6 +315,9 @@ class _AddVisitorScreenState extends State<AddVisitorScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        // ---- Optional visitor photo ------------------------
+                        Center(child: _buildPhotoPicker(scheme)),
+                        const SizedBox(height: 20),
                         TextFormField(
                           controller: _nameCtrl,
                           textCapitalization: TextCapitalization.words,

@@ -6,6 +6,11 @@
 	     this to skip the export-compliance question on every TestFlight upload. -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- Needed by image_picker to capture / choose a visitor photo. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Take a photo of the visitor for the gate entry record.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Choose a visitor photo for the gate entry record.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

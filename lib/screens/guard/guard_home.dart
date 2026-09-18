@@ -5,6 +5,7 @@ import '../../services/auth_service.dart';
 import '../../services/visitor_service.dart';
 import '../../theme.dart';
 import '../../utils/format.dart';
+import '../../widgets/visitor_avatar.dart';
 import 'add_visitor_screen.dart';
 
 class GuardHome extends StatefulWidget {
@@ -400,7 +401,6 @@ class _VisitorTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final aColor = avatarColor(visitor.name, scheme);
 
     return Card(
       child: Padding(
@@ -411,7 +411,8 @@ class _VisitorTile extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _Avatar(color: aColor, text: initialsOf(visitor.name)),
+                VisitorAvatar(
+                    name: visitor.name, photoPath: visitor.photoPath),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -490,33 +491,6 @@ class _VisitorTile extends StatelessWidget {
               ),
             ],
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.color, required this.text});
-  final Color color;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 46,
-      height: 46,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w700,
-          fontSize: 16,
         ),
       ),
     );

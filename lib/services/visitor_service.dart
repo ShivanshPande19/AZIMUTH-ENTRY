@@ -1,3 +1,6 @@
+import 'dart:math';
+import 'dart:typed_data';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/visitor.dart';
@@ -11,21 +14,60 @@ import '../models/visitor.dart';
 class VisitorService {
   final SupabaseClient _client = Supabase.instance.client;
 
+  /// Public Storage bucket that holds visitor photos.
+  static const String photoBucket = 'visitor-photos';
+
   /// Register a new visitor. The real phone number is passed to the server-side
   /// RPC, which stores it in a locked table and keeps only a masked copy where
-  /// the guard can see it.
+  /// the guard can see it. [photoPath] is the Storage object key returned by
+  /// [uploadVisitorPhoto] (null when no photo was taken).
   Future<void> addVisitor({
     required String name,
     required String phone,
     String? company,
     String? purpose,
+    String? photoPath,
   }) async {
     await _client.rpc('add_visitor', params: {
       'p_name': name,
       'p_phone': phone,
       'p_company': company,
       'p_purpose': purpose,
+      'p_photo_path': photoPath,
     });
+  }
+
+  /// Upload an already-compressed JPEG for a visitor photo and return the
+  /// Storage object key (e.g. `1699999999999-ab12.jpg`).
+  ///
+  /// The bytes are expected to be small (the picker downsizes/compresses before
+  /// this is called), so the upload stays light even on slow connections.
+  Future<String> uploadVisitorPhoto(Uint8List bytes) async {
+    final path = '${_randomName()}.jpg';
+    await _client.storage.from(photoBucket).uploadBinary(
+          path,
+          bytes,
+          fileOptions: const FileOptions(
+            contentType: 'image/jpeg',
+            upsert: true,
+          ),
+        );
+    return path;
+  }
+
+  /// Build the public URL for a stored visitor photo, or null if [path] is
+  /// empty. The bucket is public so this needs no network round-trip.
+  String? photoUrl(String? path) {
+    if (path == null || path.isEmpty) return null;
+    return _client.storage.from(photoBucket).getPublicUrl(path);
+  }
+
+  /// Unguessable, lowercase alphanumeric object name (the bucket is public, so
+  /// filenames must not be predictable).
+  String _randomName() {
+    const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
+    final rand = Random.secure();
+    return List.generate(24, (_) => chars[rand.nextInt(chars.length)]).join();
   }
 
   /// List visitors, newest first. Contains only masked phone numbers.

@@ -94,6 +94,7 @@ create table if not exists public.visitors (
   company      text,
   purpose      text,
   phone_masked text        not null default '',   -- e.g. '98••••••10'
+  photo_path   text,                              -- key in 'visitor-photos' bucket
   entry_time   timestamptz not null default now(),
   exit_time    timestamptz,
   created_by   uuid        references auth.users (id),
@@ -175,10 +176,11 @@ $$;
 -- Register a new visitor. Callable by any logged-in user (guard or owner).
 -- Stores the real number in the locked table and only a masked copy in visitors.
 create or replace function public.add_visitor(
-  p_name    text,
-  p_phone   text,
-  p_company text default null,
-  p_purpose text default null
+  p_name       text,
+  p_phone      text,
+  p_company    text default null,
+  p_purpose    text default null,
+  p_photo_path text default null
 )
 returns uuid
 language plpgsql
@@ -194,9 +196,10 @@ begin
     raise exception 'name is required';
   end if;
 
-  insert into public.visitors (name, company, purpose, phone_masked, created_by)
+  insert into public.visitors
+    (name, company, purpose, phone_masked, photo_path, created_by)
   values (trim(p_name), nullif(trim(p_company), ''), nullif(trim(p_purpose), ''),
-          public.mask_phone(p_phone), auth.uid())
+          public.mask_phone(p_phone), nullif(trim(p_photo_path), ''), auth.uid())
   returning id into v_id;
 
   if coalesce(trim(p_phone), '') <> '' then
@@ -249,13 +252,34 @@ end;
 $$;
 
 -- Lock down function execution to logged-in users only.
-revoke all on function public.add_visitor(text, text, text, text)   from public, anon;
+revoke all on function public.add_visitor(text, text, text, text, text) from public, anon;
 revoke all on function public.mark_exit(uuid)                        from public, anon;
 revoke all on function public.reveal_phone(uuid)                     from public, anon;
-grant  execute on function public.add_visitor(text, text, text, text) to authenticated;
+grant  execute on function public.add_visitor(text, text, text, text, text) to authenticated;
 grant  execute on function public.mark_exit(uuid)                     to authenticated;
 grant  execute on function public.reveal_phone(uuid)                  to authenticated;
 grant  execute on function public.is_owner()                          to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 6. VISITOR PHOTOS  (public Storage bucket — small, pre-compressed images)
+-- ---------------------------------------------------------------------------
+-- Photos are optional and less sensitive than phone numbers: the guard who
+-- takes the photo and the owner both need to see it, so the bucket is public
+-- (filenames are random/unguessable). Switch to a private bucket + signed URLs
+-- if you need stricter access.
+insert into storage.buckets (id, name, public)
+values ('visitor-photos', 'visitor-photos', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists "auth upload visitor photos" on storage.objects;
+create policy "auth upload visitor photos"
+  on storage.objects for insert to authenticated
+  with check (bucket_id = 'visitor-photos');
+
+drop policy if exists "public read visitor photos" on storage.objects;
+create policy "public read visitor photos"
+  on storage.objects for select to public
+  using (bucket_id = 'visitor-photos');
 
 -- =============================================================================
 -- DONE. See README for how to create the first owner and guard accounts.
